@@ -1,0 +1,22 @@
+# Dependency directories
+backend/node_modules/
+node_modules/
+
+# Python cache & logs
+__pycache__/
+backend/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+server_debug.log
+
+# Environment variables (secrets)
+.env
+backend/.env
+
+# Temporary / OS files
+.DS_Store
+Thumbs.db
+.tempmediaStorage/
+.gemini/
