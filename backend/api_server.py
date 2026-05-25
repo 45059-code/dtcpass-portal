@@ -1,11 +1,11 @@
 """
-DTC e-Bus Pass  –  Python API Backend  (replaces Node.js server.js)
-Listens on http://localhost:5000
-Requires: pip install pymongo requests dnspython
+DTC e-Bus Pass  –  Python API Backend
+Requires: pip install pymongo dnspython requests
 """
 
 import json
 import os
+import sys
 import random
 import base64
 import io
@@ -14,38 +14,30 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from datetime import datetime, timedelta, timezone
 import socket
-socket.getfqdn = lambda *args, **kwargs: "127.0.0.1"
-socket.gethostbyaddr = lambda *args, **kwargs: ("127.0.0.1", [], ["127.0.0.1"])
 
-# Patch dns resolver to fix SRV nameserver query failures in restricted local environments
-try:
-    import dns.resolver
-    dns.resolver.default_resolver = dns.resolver.Resolver(configure=False)
-    dns.resolver.default_resolver.nameservers = ['8.8.8.8', '8.8.4.4', '1.1.1.1']
-    print("[INFO] Configured custom Google/Cloudflare DNS resolver for MongoDB Atlas SRV query.")
-except Exception as dns_err:
-    print(f"[WARN] Could not patch DNS resolver: {dns_err}")
+print("[BOOT] api_server.py starting...", flush=True)
+print(f"[BOOT] Python {sys.version}", flush=True)
 
 try:
     import pymongo
     from pymongo import MongoClient
     HAS_MONGO = True
-except ImportError:
+    print("[BOOT] pymongo imported OK", flush=True)
+except ImportError as e:
     HAS_MONGO = False
-    print("[WARNING] pymongo not found – run: pip install pymongo dnspython")
+    print(f"[BOOT] pymongo not available: {e}", flush=True)
 
 try:
     import requests as req_lib
     HAS_REQUESTS = True
-except ImportError:
+    print("[BOOT] requests imported OK", flush=True)
+except ImportError as e:
     HAS_REQUESTS = False
-    print("[WARNING] requests not found – run: pip install requests")
+    print(f"[BOOT] requests not available: {e}", flush=True)
 
-# ── Load .env (with fallback pure-Python parser) ───────────────────────────────
-ENV_PATH = os.path.join(os.path.dirname(__file__), '.env')
-
+# ── Load env vars ─────────────────────────────────────────────────────────────
+# os.environ (Render dashboard) takes priority; .env file is local fallback only
 def _load_env(path):
-    """Minimal .env parser – no external dependency needed."""
     cfg = {}
     try:
         with open(path, 'r', encoding='utf-8') as f:
@@ -55,18 +47,21 @@ def _load_env(path):
                     continue
                 key, _, val = line.partition('=')
                 cfg[key.strip()] = val.strip().strip('"').strip("'")
+        print(f"[BOOT] Loaded .env from {path}", flush=True)
     except FileNotFoundError:
-        print(f"[WARNING] .env file not found at {path}")
+        print(f"[BOOT] No .env file found (OK on Render)", flush=True)
     return cfg
 
-try:
-    from dotenv import dotenv_values
-    cfg = dotenv_values(ENV_PATH)
-except ImportError:
-    cfg = _load_env(ENV_PATH)
-MONGODB_URI   = cfg.get('MONGODB_URI', '')
-IMGBB_API_KEY = cfg.get('IMGBB_API_KEY', '')
-PORT          = int(cfg.get('PORT', 5000))
+ENV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+cfg = _load_env(ENV_PATH)
+
+MONGODB_URI   = os.environ.get('MONGODB_URI')   or cfg.get('MONGODB_URI',   '')
+IMGBB_API_KEY = os.environ.get('IMGBB_API_KEY') or cfg.get('IMGBB_API_KEY', '')
+PORT          = int(os.environ.get('PORT')       or cfg.get('PORT', 5000))
+HOST          = '0.0.0.0'
+
+print(f"[BOOT] HOST={HOST} PORT={PORT}", flush=True)
+print(f"[BOOT] MONGODB_URI={'SET (' + MONGODB_URI[:20] + '...)' if MONGODB_URI else 'NOT SET (will use mock DB)'}", flush=True)
 
 # ── Global Settings ────────────────────────────────────────────────────────────
 ALLOW_REGISTRATION = True
@@ -161,18 +156,31 @@ def connect_db_async():
     global db_col
     if HAS_MONGO and MONGODB_URI and MONGODB_URI not in ('', 'YOUR_MONGODB_URI_HERE'):
         try:
-            print("[INFO] Connecting to MongoDB in background...", flush=True)
-            client = MongoClient(MONGODB_URI,
-                                 serverSelectionTimeoutMS=5000,
-                                 connectTimeoutMS=5000)
+            # Patch DNS inside the thread so it never blocks the main server startup
+            try:
+                import dns.resolver
+                dns.resolver.default_resolver = dns.resolver.Resolver(configure=False)
+                dns.resolver.default_resolver.nameservers = ['8.8.8.8', '8.8.4.4', '1.1.1.1']
+                print("[INFO] DNS patched to Google/Cloudflare nameservers.", flush=True)
+            except Exception as dns_err:
+                print(f"[WARN] DNS patch skipped: {dns_err}", flush=True)
+
+            print("[INFO] Connecting to MongoDB Atlas...", flush=True)
+            client = MongoClient(
+                MONGODB_URI,
+                serverSelectionTimeoutMS=8000,
+                connectTimeoutMS=8000,
+                socketTimeoutMS=10000,
+            )
             real_db_col = client['dtcpass']['passes']
-            # Dry run to test connection status
-            real_db_col.find_one({})
+            real_db_col.find_one({})  # Test connection
             db_col = real_db_col
-            print("[OK] Connected to MongoDB!", flush=True)
+            print("[OK] MongoDB Atlas connected successfully!", flush=True)
         except Exception as e:
             print(f"[WARN] MongoDB connection failed: {e}", flush=True)
-            print("[INFO] Using in-memory mock database.", flush=True)
+            print("[INFO] Falling back to in-memory mock database.", flush=True)
+    else:
+        print("[INFO] MONGODB_URI not set — using in-memory mock database.", flush=True)
 
 import threading
 threading.Thread(target=connect_db_async, daemon=True).start()
@@ -513,10 +521,18 @@ class APIHandler(BaseHTTPRequestHandler):
 
 # ── Entry point ────────────────────────────────────────────────────────────────
 if __name__ == '__main__':
-    server = HTTPServer(('127.0.0.1', PORT), APIHandler)
-    print(f"[OK] DTC API backend running at http://localhost:{PORT}")
-    print("     Press Ctrl+C to stop.")
     try:
+        print(f"[START] Binding HTTPServer to {HOST}:{PORT} ...", flush=True)
+        server = HTTPServer((HOST, PORT), APIHandler)
+        print(f"[OK] DTC API server is LIVE on http://{HOST}:{PORT}", flush=True)
+        print("     Press Ctrl+C to stop.", flush=True)
         server.serve_forever()
+    except OSError as e:
+        print(f"[FATAL] Cannot bind to {HOST}:{PORT} - {e}", flush=True)
+        sys.exit(1)
     except KeyboardInterrupt:
         print("\n[INFO] API server stopped.")
+    except Exception as e:
+        print(f"[FATAL] Unexpected error: {e}", flush=True)
+        traceback.print_exc(file=sys.stdout)
+        sys.exit(1)
