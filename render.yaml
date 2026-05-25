@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: dtc-api-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: python api_server.py
+    envVars:
+      - key: MONGODB_URI
+        sync: false
+      - key: IMGBB_API_KEY
+        sync: false
