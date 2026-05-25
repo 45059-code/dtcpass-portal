@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DTC | Registered Users e-BusPass Manager</title>
+    <link rel="icon" href="images/DTC1.png" type="image/x-icon">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <style>
+        :root {
+            --bg-color: #07162c;
+            --card-bg: rgba(13, 27, 42, 0.85);
+            --border-color: rgba(1, 162, 166, 0.25);
+            --primary-glow: #01a2a6;
+            --accent-red: #ff3b30;
+            --text-color: #e5f1f4;
+            --text-muted: #8fa0a6;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: radial-gradient(circle at 50% 50%, #0c233f 0%, var(--bg-color) 100%);
+            color: var(--text-color);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 1300px; margin: 0 auto; }
+        header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 15px 20px; background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(12px);
+            border-radius: 16px; border: 1px solid var(--border-color); margin-bottom: 25px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        }
+        .header-logo { display: flex; align-items: center; gap: 12px; }
+        .header-logo img { width: 60px; filter: drop-shadow(0 0 8px var(--primary-glow)); }
+        .header-title h1 {
+            font-size: 20px; font-weight: 700;
+            background: linear-gradient(135deg, #fff 30%, var(--primary-glow) 100%);
+            -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .header-title p { font-size: 12px; color: var(--text-muted); }
+        .stats-badge {
+            background: rgba(1, 162, 166, 0.15); border: 1px solid var(--primary-glow);
+            padding: 8px 16px; border-radius: 10px; font-weight: 600; color: var(--primary-glow);
+        }
+        .toolbar { display: flex; gap: 15px; margin-bottom: 25px; }
+        .search-wrapper { flex: 1; position: relative; }
+        .search-wrapper i { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: var(--text-muted); }
+        .search-wrapper input {
+            width: 100%; padding: 12px 15px 12px 42px; background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-color);
+            font-size: 14px; outline: none; transition: all 0.3s;
+        }
+        .search-wrapper input:focus { border-color: var(--primary-glow); background: rgba(255, 255, 255, 0.05); }
+        .btn-home {
+            background: rgba(255, 255, 255, 0.05); color: var(--text-color); border: 1px solid var(--border-color);
+            padding: 0 20px; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.3s;
+            display: flex; align-items: center; gap: 8px; text-decoration: none; font-size: 14px;
+        }
+        .btn-home:hover { background: var(--primary-glow); border-color: var(--primary-glow); transform: translateY(-2px); }
+        
+        /* Grid and Cards */
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+        .card {
+            background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 14px;
+            padding: 18px; position: relative; overflow: hidden; transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); display: flex; flex-direction: column; justify-content: space-between;
+        }
+        .card:hover { transform: translateY(-4px); border-color: var(--primary-glow); box-shadow: 0 8px 25px rgba(1, 162, 166, 0.25); }
+        .card-info { display: flex; gap: 12px; margin-bottom: 12px; }
+        .card-photo { width: 80px; height: 100px; object-fit: cover; border-radius: 6px; border: 1.5px solid var(--border-color); }
+        .card-details { display: flex; flex-direction: column; justify-content: center; }
+        .card-name { font-size: 16px; font-weight: 700; text-transform: uppercase; color: #fff; margin-bottom: 4px; }
+        .card-passno { font-size: 14px; font-weight: 600; color: #ffd700; margin-bottom: 4px; }
+        .card-meta { font-size: 12px; color: var(--text-muted); margin-bottom: 2px; }
+        .card-meta strong { color: var(--text-color); }
+        .card-dates { font-size: 12px; color: #ff5e57; font-weight: bold; margin-bottom: 12px; }
+        
+        .card-footer {
+            display: flex; align-items: center; justify-content: space-between;
+            padding-top: 12px; border-top: 1px dashed rgba(255, 255, 255, 0.1);
+        }
+        .qr-thumb { width: 55px; height: 55px; border-radius: 4px; background: #fff; padding: 2px; cursor: pointer; }
+        .actions { display: flex; flex-direction: column; gap: 6px; width: calc(100% - 68px); }
+        .btn-act {
+            width: 100%; padding: 6px 10px; border-radius: 6px; border: none; font-size: 12px; font-weight: 600;
+            cursor: pointer; transition: all 0.3s; display: flex; align-items: center; justify-content: center; gap: 5px;
+        }
+        .btn-edit { background: linear-gradient(135deg, #01a2a6, #00c6ff); color: white; }
+        .btn-edit:hover { background: linear-gradient(135deg, #02c0c4, #0072ff); }
+        .btn-del { background: rgba(255, 59, 48, 0.15); border: 1px solid rgba(255, 59, 48, 0.3); color: var(--accent-red); }
+        .btn-del:hover { background: var(--accent-red); color: white; }
+
+        /* Modal / Overlay */
+        .overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(7, 13, 22, 0.9);
+            backdrop-filter: blur(8px); display: none; align-items: center; justify-content: center; z-index: 100; padding: 15px;
+        }
+        .modal {
+            width: 100%; max-width: 500px; background: #0f243e; border: 1.5px solid var(--primary-glow);
+            border-radius: 16px; padding: 20px; box-shadow: 0 15px 35px rgba(1, 162, 166, 0.25);
+        }
+        .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+        .modal-header h3 { font-size: 18px; font-weight: 700; color: #fff; }
+        .btn-close { background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer; }
+        .btn-close:hover { color: var(--accent-red); }
+        .modal-form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .span-2 { grid-column: span 2; }
+        .form-group { display: flex; flex-direction: column; gap: 4px; }
+        .form-group label { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+        .form-group input {
+            width: 100%; padding: 8px 10px; background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color); border-radius: 6px; color: #fff; font-size: 13px; outline: none;
+        }
+        .form-group input:focus { border-color: var(--primary-glow); }
+        .upload-row { display: flex; gap: 10px; grid-column: span 2; margin-top: 5px; }
+        .upload-btn {
+            flex: 1; background: rgba(255, 255, 255, 0.02); border: 1px dashed var(--border-color);
+            border-radius: 8px; padding: 10px; text-align: center; cursor: pointer; font-size: 11px; color: var(--text-muted);
+        }
+        .upload-btn:hover { border-color: var(--primary-glow); background: rgba(1, 162, 166, 0.05); }
+        .upload-btn i { font-size: 16px; color: var(--primary-glow); display: block; margin-bottom: 3px; }
+        .upload-btn input { display: none; }
+        .modal-actions { grid-column: span 2; display: flex; gap: 12px; margin-top: 15px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.1); }
+        .btn-sub { flex: 2; padding: 10px; border-radius: 8px; border: none; background: linear-gradient(135deg, #11998e, #38ef7d); color: #fff; font-weight: 700; cursor: pointer; }
+        .btn-sub:hover { box-shadow: 0 4px 15px rgba(56, 239, 125, 0.4); }
+        .btn-can { flex: 1; padding: 10px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(255, 255, 255, 0.05); color: var(--text-color); cursor: pointer; }
+        
+        .loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(7, 22, 44, 0.85); z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
+        .spinner { width: 40px; height: 40px; border: 4px solid rgba(1, 162, 166, 0.2); border-top-color: var(--primary-glow); border-radius: 50%; animation: spin 1s infinite linear; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .load-text { color: var(--primary-glow); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+
+        /* Premium Glowing Glassmorphic Switch Styling */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 54px;
+            height: 28px;
+        }
+        .switch input { 
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 1.5px solid var(--border-color);
+            transition: .4s;
+            border-radius: 34px;
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.3);
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 4px;
+            bottom: 2.5px;
+            background-color: var(--text-muted);
+            transition: .4s;
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+        }
+        input:checked + .slider {
+            background-color: rgba(1, 162, 166, 0.2);
+            border-color: var(--primary-glow);
+            box-shadow: 0 0 10px rgba(1, 162, 166, 0.3);
+        }
+        input:checked + .slider:before {
+            transform: translateX(24px);
+            background-color: var(--primary-glow);
+            box-shadow: 0 0 10px var(--primary-glow);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-logo">
+                <img src="images/DTC1.png" alt="DTC Logo">
+                <div class="header-title">
+                    <h1>Delhi Transport Corporation</h1>
+                    <p>Registered e-BusPass Dashboard Panel</p>
+                </div>
+            </div>
+            <div class="stats-badge" id="statsBadge">Loading...</div>
+        <!-- Admin Global Controls -->
+        <div class="admin-controls" style="background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(12px); border-radius: 16px; border: 1px solid var(--border-color); padding: 15px 20px; margin-bottom: 25px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <i class="fa fa-cogs" style="font-size: 24px; color: var(--primary-glow); text-shadow: 0 0 10px var(--primary-glow);"></i>
+                <div>
+                    <h3 style="font-size: 15px; font-weight: 600; color: #fff;">Registration Gateway Status</h3>
+                    <p style="font-size: 11px; color: var(--text-muted);">Enable or disable new user pass applications dynamically</p>
+                </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <span id="gatewayStatusText" style="font-size: 13px; font-weight: 700; color: #01a2a6; text-transform: uppercase; letter-spacing: 1px;">ENABLED</span>
+                <label class="switch">
+                    <input type="checkbox" id="regToggle" onchange="toggleRegistrationGateway(this)">
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+
+        <div class="toolbar">
+            <div class="search-wrapper">
+                <i class="fa fa-search"></i>
+                <input type="text" id="searchBar" placeholder="Search by Name, Pass Number, or Mobile..." oninput="filterCards()">
+            </div>
+            <a href="getEPass.jsp.html" class="btn-home"><i class="fa fa-home"></i> Back</a>
+        </div>
+
+        <div class="grid" id="grid"></div>
+    </div>
+
+    <!-- Modal Editor -->
+    <div class="overlay" id="overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3><i class="fa fa-pencil-square-o"></i> Edit e-BusPass Record</h3>
+                <button class="btn-close" onclick="closeEditor()">&times;</button>
+            </div>
+            <form id="editForm" onsubmit="savePassChanges(event)" class="modal-form">
+                <input type="hidden" id="editId">
+                <div class="form-group span-2">
+                    <label>Full Name</label>
+                    <input type="text" id="editName" required style="text-transform: uppercase;">
+                </div>
+                <div class="form-group">
+                    <label>Mobile Number</label>
+                    <input type="text" id="editMobile" required maxlength="10">
+                </div>
+                <div class="form-group">
+                    <label>Date of Birth</label>
+                    <input type="text" id="editDob" placeholder="DD/MM/YYYY" required>
+                </div>
+                <div class="form-group span-2">
+                    <label>e-BusPass Number</label>
+                    <input type="text" id="editPassNo" required>
+                </div>
+                <div class="form-group">
+                    <label>Validity From</label>
+                    <input type="date" id="editValidFrom" required>
+                </div>
+                <div class="form-group">
+                    <label>Validity To</label>
+                    <input type="date" id="editValidTo" required>
+                </div>
+                <div class="upload-row">
+                    <div class="upload-btn" onclick="document.getElementById('editPhoto').click()">
+                        <i class="fa fa-user-circle"></i><span id="photoLabel">Change Photo</span>
+                        <input type="file" id="editPhoto" accept="image/*" onchange="handleFile(this, 'photoLabel')">
+                    </div>
+                    <div class="upload-btn" onclick="document.getElementById('editQr').click()">
+                        <i class="fa fa-qrcode"></i><span id="qrLabel">Upload QR Code</span>
+                        <input type="file" id="editQr" accept="image/*" onchange="handleFile(this, 'qrLabel')">
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="submit" class="btn-sub">Save Changes</button>
+                    <button type="button" class="btn-can" onclick="closeEditor()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <div class="load-text" id="loadText">Loading Passes...</div>
+    </div>
+
+    <script>
+        var passes = [];
+        var apiHost = window.location.hostname ? ('http://' + window.location.hostname + ':5000') : 'http://localhost:5000';
+
+        window.onload = () => {
+            fetchPasses();
+            fetchSettings();
+        };
+
+        function fetchSettings() {
+            fetch(apiHost + '/api/settings?t=' + new Date().getTime())
+            .then(res => res.json())
+            .then(data => {
+                const regToggle = document.getElementById('regToggle');
+                const statusText = document.getElementById('gatewayStatusText');
+                regToggle.checked = data.allow_registration;
+                if (data.allow_registration) {
+                    statusText.textContent = "ENABLED";
+                    statusText.style.color = "#01a2a6";
+                } else {
+                    statusText.textContent = "DISABLED";
+                    statusText.style.color = "#ff3b30";
+                }
+            })
+            .catch(err => console.error("Error fetching settings:", err));
+        }
+
+        function toggleRegistrationGateway(toggleEl) {
+            const statusText = document.getElementById('gatewayStatusText');
+            statusText.textContent = "Updating...";
+            statusText.style.color = "var(--text-muted)";
+            
+            fetch(apiHost + '/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ allow_registration: toggleEl.checked })
+            })
+            .then(res => {
+                if (!res.ok) throw new Error();
+                return res.json();
+            })
+            .then(data => {
+                toggleEl.checked = data.allow_registration;
+                if (data.allow_registration) {
+                    statusText.textContent = "ENABLED";
+                    statusText.style.color = "#01a2a6";
+                } else {
+                    statusText.textContent = "DISABLED";
+                    statusText.style.color = "#ff3b30";
+                }
+            })
+            .catch(() => {
+                alert("Failed to update gateway status. Please check backend connection.");
+                fetchSettings();
+            });
+        }
+
+        function fetchPasses() {
+            showLoad("Retrieving Pass Database...");
+            fetch(apiHost + '/api/passes?t=' + new Date().getTime())
+            .then(res => { if (!res.ok) throw new Error(); return res.json(); })
+            .then(data => { passes = data; renderCards(data); hideLoad(); })
+            .catch(() => {
+                hideLoad();
+                document.getElementById('grid').innerHTML =
+                    `<div style="grid-column:1/-1;text-align:center;padding:40px;">
+                        <div style="color:#ff5e57;font-size:18px;font-weight:700;margin-bottom:10px;">
+                            ⚠️ Cannot connect to API server
+                        </div>
+                        <div style="color:var(--text-muted);font-size:14px;margin-bottom:20px;">
+                            Make sure the backend is running.<br>
+                            Run <code style="color:#01a2a6;">START_SERVER.bat</code> and refresh.
+                        </div>
+                        <button onclick="fetchPasses()" style="padding:10px 24px;background:linear-gradient(135deg,#01a2a6,#00c6ff);color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:14px;">
+                            🔄 Retry
+                        </button>
+                    </div>`;
+                document.getElementById('statsBadge').innerHTML = '⚠️ Offline';
+            });
+        }
+
+        function renderCards(data) {
+            var grid = document.getElementById('grid');
+            grid.innerHTML = "";
+            document.getElementById('statsBadge').innerHTML = `<i class="fa fa-users"></i> ${data.length} Passes`;
+            if (data.length === 0) {
+                grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);">No records found.</div>`;
+                return;
+            }
+            data.forEach(pass => {
+                const qrSource = pass.qrCodeUrl || ('https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' + encodeURIComponent(pass.passno));
+                const fromD = new Date(pass.validFrom).toLocaleDateString('en-GB');
+                const toD = new Date(pass.validTo).toLocaleDateString('en-GB');
+                const card = document.createElement('div');
+                card.className = "card";
+                card.innerHTML = `
+                    <div class="card-info">
+                        <img class="card-photo" src="${pass.photoUrl}" alt="Photo" onerror="this.src='images/DTC1.png'">
+                        <div class="card-details">
+                            <h4 class="card-name">${pass.name}</h4>
+                            <p class="card-passno">${pass.passno}</p>
+                            <p class="card-meta">Mobile: <strong>${pass.mobile}</strong></p>
+                            <p class="card-meta">DOB: <strong>${pass.dob}</strong></p>
+                        </div>
+                    </div>
+                    <div class="card-dates">Validity: ${fromD} to ${toD}</div>
+                    <div class="card-footer">
+                        <img class="qr-thumb" src="${qrSource}" title="Click to view" onclick="window.open('${qrSource}', '_blank')">
+                        <div class="actions">
+                            <button class="btn-act btn-edit" onclick="openEditor('${pass._id}')"><i class="fa fa-edit"></i> Edit</button>
+                            <button class="btn-act btn-del" onclick="deletePass('${pass._id}')"><i class="fa fa-trash"></i> Delete</button>
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function filterCards() {
+            var q = document.getElementById('searchBar').value.toLowerCase().trim();
+            if (!q) { renderCards(passes); return; }
+            var filtered = passes.filter(p => p.name.toLowerCase().includes(q) || p.passno.toLowerCase().includes(q) || p.mobile.includes(q));
+            renderCards(filtered);
+        }
+
+        function openEditor(id) {
+            var p = passes.find(x => x._id === id);
+            if (!p) return;
+            document.getElementById('editId').value = p._id;
+            document.getElementById('editName').value = p.name;
+            document.getElementById('editMobile').value = p.mobile;
+            document.getElementById('editDob').value = p.dob;
+            document.getElementById('editPassNo').value = p.passno;
+            document.getElementById('editValidFrom').value = new Date(p.validFrom).toISOString().split('T')[0];
+            document.getElementById('editValidTo').value = new Date(p.validTo).toISOString().split('T')[0];
+            document.getElementById('photoLabel').textContent = "Change Photo";
+            document.getElementById('qrLabel').textContent = "Upload QR Code";
+            document.getElementById('overlay').style.display = "flex";
+        }
+
+        function closeEditor() { document.getElementById('overlay').style.display = "none"; }
+        function handleFile(input, labelId) {
+            var lbl = document.getElementById(labelId);
+            lbl.textContent = input.files && input.files[0] ? "Selected: " + input.files[0].name.substring(0, 15) : (labelId === 'photoLabel' ? "Change Photo" : "Upload QR Code");
+        }
+
+        function savePassChanges(e) {
+            e.preventDefault();
+            var id = document.getElementById('editId').value;
+            showLoad("Saving Pass Changes...");
+            var fd = new FormData();
+            fd.append("name", document.getElementById('editName').value);
+            fd.append("mobile", document.getElementById('editMobile').value);
+            fd.append("dob", document.getElementById('editDob').value);
+            fd.append("passno", document.getElementById('editPassNo').value);
+            fd.append("validFrom", document.getElementById('editValidFrom').value);
+            fd.append("validTo", document.getElementById('editValidTo').value);
+            
+            var pFile = document.getElementById('editPhoto').files[0];
+            var qFile = document.getElementById('editQr').files[0];
+            if (pFile) fd.append("photo", pFile);
+            if (qFile) fd.append("qrCode", qFile);
+
+            fetch(apiHost + '/api/passes/' + id, { method: 'PUT', body: fd })
+            .then(res => { if (!res.ok) throw new Error(); return res.json(); })
+            .then(() => { alert("Pass changes saved successfully! All updates are live instantly."); closeEditor(); fetchPasses(); })
+            .catch(() => { alert("Error saving changes."); hideLoad(); });
+        }
+
+        function deletePass(id) {
+            var p = passes.find(x => x._id === id);
+            if (!p || !confirm(`Delete pass for ${p.name}?`)) return;
+            showLoad("Deleting Pass...");
+            fetch(apiHost + '/api/passes/' + id, { method: 'DELETE' })
+            .then(res => { if (!res.ok) throw new Error(); return res.json(); })
+            .then(() => { alert("e-BusPass deleted successfully."); fetchPasses(); })
+            .catch(() => { alert("Error deleting pass."); hideLoad(); });
+        }
+
+        function showLoad(txt) { document.getElementById('loadText').textContent = txt; document.getElementById('loading').style.display = "flex"; }
+        function hideLoad() { document.getElementById('loading').style.display = "none"; }
+    </script>
+</body>
+</html>

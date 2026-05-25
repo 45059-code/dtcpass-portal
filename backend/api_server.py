@@ -1,0 +1,522 @@
+"""
+DTC e-Bus Pass  –  Python API Backend  (replaces Node.js server.js)
+Listens on http://localhost:5000
+Requires: pip install pymongo requests dnspython
+"""
+
+import json
+import os
+import random
+import base64
+import io
+import traceback
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from urllib.parse import urlparse, parse_qs
+from datetime import datetime, timedelta, timezone
+import socket
+socket.getfqdn = lambda *args, **kwargs: "127.0.0.1"
+socket.gethostbyaddr = lambda *args, **kwargs: ("127.0.0.1", [], ["127.0.0.1"])
+
+# Patch dns resolver to fix SRV nameserver query failures in restricted local environments
+try:
+    import dns.resolver
+    dns.resolver.default_resolver = dns.resolver.Resolver(configure=False)
+    dns.resolver.default_resolver.nameservers = ['8.8.8.8', '8.8.4.4', '1.1.1.1']
+    print("[INFO] Configured custom Google/Cloudflare DNS resolver for MongoDB Atlas SRV query.")
+except Exception as dns_err:
+    print(f"[WARN] Could not patch DNS resolver: {dns_err}")
+
+try:
+    import pymongo
+    from pymongo import MongoClient
+    HAS_MONGO = True
+except ImportError:
+    HAS_MONGO = False
+    print("[WARNING] pymongo not found – run: pip install pymongo dnspython")
+
+try:
+    import requests as req_lib
+    HAS_REQUESTS = True
+except ImportError:
+    HAS_REQUESTS = False
+    print("[WARNING] requests not found – run: pip install requests")
+
+# ── Load .env (with fallback pure-Python parser) ───────────────────────────────
+ENV_PATH = os.path.join(os.path.dirname(__file__), '.env')
+
+def _load_env(path):
+    """Minimal .env parser – no external dependency needed."""
+    cfg = {}
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#') or '=' not in line:
+                    continue
+                key, _, val = line.partition('=')
+                cfg[key.strip()] = val.strip().strip('"').strip("'")
+    except FileNotFoundError:
+        print(f"[WARNING] .env file not found at {path}")
+    return cfg
+
+try:
+    from dotenv import dotenv_values
+    cfg = dotenv_values(ENV_PATH)
+except ImportError:
+    cfg = _load_env(ENV_PATH)
+MONGODB_URI   = cfg.get('MONGODB_URI', '')
+IMGBB_API_KEY = cfg.get('IMGBB_API_KEY', '')
+PORT          = int(cfg.get('PORT', 5000))
+
+# ── Global Settings ────────────────────────────────────────────────────────────
+ALLOW_REGISTRATION = True
+
+# ── MongoDB connection ─────────────────────────────────────────────────────────
+# ── Mock Database for Offline/Fallback Mode ────────────────────────────────────
+try:
+    from bson import ObjectId
+except ImportError:
+    class ObjectId:
+        def __init__(self, val=None):
+            self.val = val or os.urandom(12).hex()
+        def __str__(self):
+            return str(self.val)
+        def __eq__(self, other):
+            return str(self) == str(other)
+        def __hash__(self):
+            return hash(str(self))
+
+class MockCollection:
+    def __init__(self):
+        self.passes = []
+        # Seed with a default pass for testing/demo
+        now = datetime.now(timezone.utc)
+        self.passes.append({
+            '_id': ObjectId('6443c5b96912b7a4cf8a27d2'),
+            'passno': '7502032600973',
+            'name': 'PAWAN KUMAR',
+            'mobile': '9999999999',
+            'dob': '01/01/2000',
+            'photoUrl': 'images/pawan.jpg',
+            'qrCodeUrl': '',
+            'validFrom': now,
+            'validTo': now + timedelta(days=150),
+            'createdAt': now,
+            'updatedAt': now,
+        })
+
+    def find(self, query=None):
+        results = self.passes
+        class Cursor:
+            def __init__(self, data):
+                self.data = data
+            def sort(self, key, direction=1):
+                # Simple sort by createdAt DESC
+                if key == 'createdAt' and direction == -1:
+                    return sorted(self.data, key=lambda x: x.get('createdAt', datetime.min), reverse=True)
+                return self.data
+            def __iter__(self):
+                return iter(self.data)
+        return Cursor(results)
+
+    def find_one(self, query):
+        for p in self.passes:
+            match = True
+            for k, v in query.items():
+                if k == '_id':
+                    if str(p.get('_id')) != str(v):
+                        match = False
+                        break
+                elif p.get(k) != v:
+                    match = False
+                    break
+            if match:
+                return p
+        return None
+
+    def insert_one(self, doc):
+        if '_id' not in doc:
+            doc['_id'] = ObjectId()
+        self.passes.append(doc)
+        return doc
+
+    def update_one(self, query, update):
+        doc = self.find_one(query)
+        if doc and '$set' in update:
+            for k, v in update['$set'].items():
+                doc[k] = v
+        return doc
+
+    def find_one_and_delete(self, query):
+        doc = self.find_one(query)
+        if doc:
+            self.passes.remove(doc)
+            return doc
+        return None
+
+# ── MongoDB connection ─────────────────────────────────────────────────────────
+db_col = MockCollection()
+
+def connect_db_async():
+    global db_col
+    if HAS_MONGO and MONGODB_URI and MONGODB_URI not in ('', 'YOUR_MONGODB_URI_HERE'):
+        try:
+            print("[INFO] Connecting to MongoDB in background...", flush=True)
+            client = MongoClient(MONGODB_URI,
+                                 serverSelectionTimeoutMS=5000,
+                                 connectTimeoutMS=5000)
+            real_db_col = client['dtcpass']['passes']
+            # Dry run to test connection status
+            real_db_col.find_one({})
+            db_col = real_db_col
+            print("[OK] Connected to MongoDB!", flush=True)
+        except Exception as e:
+            print(f"[WARN] MongoDB connection failed: {e}", flush=True)
+            print("[INFO] Using in-memory mock database.", flush=True)
+
+import threading
+threading.Thread(target=connect_db_async, daemon=True).start()
+
+# ── Helpers ────────────────────────────────────────────────────────────────────
+
+def generate_passno():
+    return '750' + str(random.randint(1000000000, 9999999999))
+
+
+def upload_to_imgbb(image_bytes: bytes) -> str:
+    """Upload image bytes to ImgBB and return the public URL."""
+    if not HAS_REQUESTS:
+        raise RuntimeError("requests library not installed")
+    if not IMGBB_API_KEY or IMGBB_API_KEY == 'YOUR_IMGBB_API_KEY_HERE':
+        raise RuntimeError("ImgBB API key is missing in .env")
+    encoded = base64.b64encode(image_bytes).decode('utf-8')
+    resp = req_lib.post(
+        f"https://api.imgbb.com/1/upload?key={IMGBB_API_KEY}",
+        data={'image': encoded},
+        timeout=30
+    )
+    resp.raise_for_status()
+    return resp.json()['data']['url']
+
+
+def doc_to_dict(doc) -> dict:
+    """Convert a MongoDB document to a JSON-serialisable dict."""
+    if doc is None:
+        return None
+    d = dict(doc)
+    # Convert ObjectId → string
+    if '_id' in d:
+        d['_id'] = str(d['_id'])
+    # Convert datetime → ISO string
+    for key in ('validFrom', 'validTo', 'createdAt', 'updatedAt'):
+        if key in d and isinstance(d[key], datetime):
+            d[key] = d[key].isoformat()
+    return d
+
+
+def parse_multipart(handler):
+    """Parse multipart/form-data from the request body without using cgi or external packages."""
+    ctype = handler.headers.get('Content-Type', '')
+    length = int(handler.headers.get('Content-Length', 0))
+    body = handler.rfile.read(length)
+
+    fields = {}
+    files = {}
+
+    if not ctype.startswith('multipart/form-data'):
+        return fields, files
+
+    # Find the boundary
+    boundary_marker = 'boundary='
+    idx = ctype.find(boundary_marker)
+    if idx == -1:
+        return fields, files
+    boundary = ctype[idx + len(boundary_marker):].strip()
+    if not boundary:
+        return fields, files
+
+    # Split body by boundary (prefix with --)
+    boundary_bytes = ('--' + boundary).encode('utf-8')
+    parts = body.split(boundary_bytes)
+
+    for part in parts:
+        part = part.strip()
+        if not part or part == b'--':
+            continue
+
+        # Split headers and content
+        if b'\r\n\r\n' in part:
+            header_bytes, content_bytes = part.split(b'\r\n\r\n', 1)
+        elif b'\n\n' in part:
+            header_bytes, content_bytes = part.split(b'\n\n', 1)
+        else:
+            continue
+
+        # Trim trailing \r\n from content
+        if content_bytes.endswith(b'\r\n'):
+            content_bytes = content_bytes[:-2]
+        elif content_bytes.endswith(b'\n'):
+            content_bytes = content_bytes[:-1]
+
+        # Parse headers
+        headers = {}
+        for line in header_bytes.decode('utf-8', errors='ignore').split('\n'):
+            line = line.strip()
+            if not line:
+                continue
+            if ':' in line:
+                k, v = line.split(':', 1)
+                headers[k.strip().lower()] = v.strip()
+
+        # Parse Content-Disposition
+        disposition = headers.get('content-disposition', '')
+        if not disposition:
+            continue
+
+        params = {}
+        for param in disposition.split(';'):
+            if '=' in param:
+                pk, pv = param.strip().split('=', 1)
+                params[pk.strip().lower()] = pv.strip().strip('"')
+
+        name = params.get('name')
+        if not name:
+            continue
+
+        filename = params.get('filename')
+        if filename is not None:
+            # File field
+            files[name] = content_bytes
+        else:
+            # Ordinary text field
+            fields[name] = content_bytes.decode('utf-8', errors='ignore')
+
+    return fields, files
+
+
+# ── HTTP Handler ───────────────────────────────────────────────────────────────
+
+class APIHandler(BaseHTTPRequestHandler):
+
+    def address_string(self):
+        return self.client_address[0]
+
+    def _send_json(self, status: int, data):
+        body = json.dumps(data, ensure_ascii=False).encode('utf-8')
+        self.send_response(status)
+        self.send_header('Content-Type', 'application/json; charset=utf-8')
+        self.send_header('Content-Length', str(len(body)))
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+        self.send_header('Pragma', 'no-cache')
+        self.send_header('Expires', '0')
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _path_and_query(self):
+        parsed = urlparse(self.path)
+        qs = parse_qs(parsed.query)
+        # Flatten single-value lists
+        qs = {k: (v[0] if len(v) == 1 else v) for k, v in qs.items()}
+        return parsed.path.rstrip('/'), qs
+
+    # CORS pre-flight
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
+
+    # ── GET ──────────────────────────────────────────────────────────────────
+    def do_GET(self):
+        path, qs = self._path_and_query()
+
+        # GET /api/settings - retrieve global registration settings
+        if path == '/api/settings':
+            return self._send_json(200, {'allow_registration': ALLOW_REGISTRATION})
+
+        # GET /api/passes  – list all (admin)
+        if path == '/api/passes':
+            if db_col is None:
+                return self._send_json(500, {'error': 'Database not connected'})
+            docs = list(db_col.find().sort('createdAt', -1))
+            return self._send_json(200, [doc_to_dict(d) for d in docs])
+
+        # GET /api/passes/check?mobile=&dob=
+        if path == '/api/passes/check':
+            mobile = qs.get('mobile', '').strip()
+            dob    = qs.get('dob', '').strip()
+            if not mobile or not dob:
+                return self._send_json(400, {'error': 'Mobile and Date of Birth are required.'})
+            if db_col is None:
+                return self._send_json(500, {'error': 'Database not connected'})
+            doc = db_col.find_one({'mobile': mobile, 'dob': dob})
+            if doc:
+                return self._send_json(200, {'exists': True, 'pass': doc_to_dict(doc)})
+            return self._send_json(200, {'exists': False})
+
+        # GET /api/passes/<passno>
+        if path.startswith('/api/passes/'):
+            passno = path[len('/api/passes/'):]
+            if db_col is None:
+                return self._send_json(500, {'error': 'Database not connected'})
+            doc = db_col.find_one({'passno': passno})
+            if not doc and passno == '7502032600973':
+                # Fallback: Find the default Pawan Kumar record by its unique _id
+                doc = db_col.find_one({'_id': ObjectId('6443c5b96912b7a4cf8a27d2')})
+            if not doc:
+                return self._send_json(404, {'error': 'Bus Pass not found.'})
+            return self._send_json(200, doc_to_dict(doc))
+
+        self._send_json(404, {'error': 'Not found'})
+
+    # ── POST ─────────────────────────────────────────────────────────────────
+    def do_POST(self):
+        path, _ = self._path_and_query()
+
+        # POST /api/settings - toggle registration state
+        if path == '/api/settings':
+            global ALLOW_REGISTRATION
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                body = self.rfile.read(length).decode('utf-8')
+                data = json.loads(body)
+                ALLOW_REGISTRATION = bool(data.get('allow_registration', True))
+                print(f"[INFO] Registration setting updated: ALLOW_REGISTRATION = {ALLOW_REGISTRATION}")
+                return self._send_json(200, {'success': True, 'allow_registration': ALLOW_REGISTRATION})
+            except Exception as e:
+                return self._send_json(400, {'error': str(e)})
+
+        # POST /api/passes/apply
+        if path == '/api/passes/apply':
+            if not ALLOW_REGISTRATION:
+                return self._send_json(403, {'error': 'Registration is currently disabled by Admin.'})
+            try:
+                fields, files = parse_multipart(self)
+                name   = fields.get('name', '').strip()
+                mobile = fields.get('mobile', '').strip()
+                dob    = fields.get('dob', '').strip()
+
+                if not files.get('photo'):
+                    return self._send_json(400, {'error': 'Please upload a photo.'})
+                if db_col is None:
+                    return self._send_json(500, {'error': 'Database not connected'})
+
+                print("[INFO] Uploading photo to ImgBB...")
+                photo_url = upload_to_imgbb(files['photo'])
+                print(f"[INFO] Photo URL: {photo_url}")
+
+                now      = datetime.now(timezone.utc)
+                valid_to = now + timedelta(days=5*30 - 1)
+                passno   = generate_passno()
+
+                doc = {
+                    'passno':   passno,
+                    'name':     name.upper(),
+                    'mobile':   mobile,
+                    'dob':      dob,
+                    'photoUrl': photo_url,
+                    'qrCodeUrl': '',
+                    'validFrom': now,
+                    'validTo':  valid_to,
+                    'createdAt': now,
+                    'updatedAt': now,
+                }
+                db_col.insert_one(doc)
+                print(f"[INFO] Saved pass {passno} to MongoDB.")
+
+                return self._send_json(201, {
+                    'success': True,
+                    'passno': passno,
+                    'redirectUrl': f'http://localhost:8000/viewEBPass.html?passno={passno}'
+                })
+            except Exception as e:
+                traceback.print_exc()
+                return self._send_json(500, {'error': str(e)})
+
+        self._send_json(405, {'error': 'Method Not Allowed'})
+
+    # ── PUT ──────────────────────────────────────────────────────────────────
+    def do_PUT(self):
+        path, _ = self._path_and_query()
+
+        # PUT /api/passes/<id>
+        if path.startswith('/api/passes/'):
+            pass_id = path[len('/api/passes/'):]
+            try:
+                fields, files = parse_multipart(self)
+
+                if db_col is None:
+                    return self._send_json(500, {'error': 'Database not connected'})
+
+                doc = db_col.find_one({'_id': ObjectId(pass_id)})
+                if not doc:
+                    return self._send_json(404, {'error': 'Pass not found.'})
+
+                update = {'updatedAt': datetime.now(timezone.utc)}
+
+                if files.get('photo'):
+                    update['photoUrl'] = upload_to_imgbb(files['photo'])
+                if files.get('qrCode'):
+                    update['qrCodeUrl'] = upload_to_imgbb(files['qrCode'])
+                if fields.get('name'):    update['name']      = fields['name'].strip().upper()
+                if fields.get('mobile'):  update['mobile']    = fields['mobile'].strip()
+                if fields.get('dob'):     update['dob']       = fields['dob'].strip()
+                if fields.get('passno'):  update['passno']    = fields['passno'].strip()
+                if fields.get('validFrom'):
+                    dt = datetime.fromisoformat(fields['validFrom'])
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    update['validFrom'] = dt
+                if fields.get('validTo'):
+                    dt = datetime.fromisoformat(fields['validTo'])
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    update['validTo'] = dt
+
+                db_col.update_one({'_id': ObjectId(pass_id)}, {'$set': update})
+                updated = db_col.find_one({'_id': ObjectId(pass_id)})
+                print(f"[INFO] Pass successfully updated in database: {doc_to_dict(updated)}")
+                return self._send_json(200, {'success': True, 'pass': doc_to_dict(updated)})
+
+            except Exception as e:
+                traceback.print_exc()
+                return self._send_json(500, {'error': str(e)})
+
+        self._send_json(404, {'error': 'Not found'})
+
+    # ── DELETE ───────────────────────────────────────────────────────────────
+    def do_DELETE(self):
+        path, _ = self._path_and_query()
+
+        if path.startswith('/api/passes/'):
+            pass_id = path[len('/api/passes/'):]
+            try:
+                if db_col is None:
+                    return self._send_json(500, {'error': 'Database not connected'})
+                result = db_col.find_one_and_delete({'_id': ObjectId(pass_id)})
+                if not result:
+                    return self._send_json(404, {'error': 'Pass not found.'})
+                return self._send_json(200, {'success': True, 'message': 'Pass deleted successfully.'})
+            except Exception as e:
+                traceback.print_exc()
+                return self._send_json(500, {'error': str(e)})
+
+        self._send_json(404, {'error': 'Not found'})
+
+    def log_message(self, fmt, *args):
+        print(f"[{self.address_string()}] {fmt % args}")
+
+
+# ── Entry point ────────────────────────────────────────────────────────────────
+if __name__ == '__main__':
+    server = HTTPServer(('127.0.0.1', PORT), APIHandler)
+    print(f"[OK] DTC API backend running at http://localhost:{PORT}")
+    print("     Press Ctrl+C to stop.")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\n[INFO] API server stopped.")

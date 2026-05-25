@@ -1,0 +1,485 @@
+﻿
+
+
+
+<!DOCTYPE html>
+<html lang="en" class="wide wow-animation smoothscroll scrollTo">
+  <head>
+    <title>Home | Apply</title>
+    <meta charset="utf-8">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+    <meta name="keywords" content="intense web design multipurpose template">
+    <meta name="date" content="Dec 26">
+    <link rel="icon" href="images/DTC1.png" type="image/x-icon">
+    <link rel="stylesheet" href="css/style.css">
+	<script type="text/javascript" src="js/validation.js"></script>
+	<script type="text/javascript" src="calender/jquery-1.11.3.min.js"></script>
+	<script type="text/javascript" src="calender/bootstrap-datepicker.min.js"></script>
+	<link rel="stylesheet" href="calender/bootstrap-datepicker3.css">
+
+  <script>
+        function refreshCaptcha() {
+            var captchaImage = document.getElementById('captchaImage');
+            captchaImage.src = 'captchaServlet?' + new Date().getTime();
+        }
+        </script>
+     <script language="JavaScript">
+    function validateCaptcha() {
+        var userInput = document.getElementById("typeCaptcha").value;
+        
+        if (userInput.length === 0) {
+            alert('Please fill captcha.');
+            return false; // Prevent form submission
+        }
+
+        var xmlhttp;
+        if (window.XMLHttpRequest) {
+            xmlhttp = new XMLHttpRequest();
+        } else {
+            xmlhttp = new ActiveXObject("Microsoft.XMLHTTP");
+        }
+
+        xmlhttp.open("POST", "validateCaptchaServlet?typeCaptcha=" + userInput, true);
+        
+        xmlhttp.onreadystatechange = function() {
+            if (xmlhttp.readyState === 4 && xmlhttp.status === 200) {
+                var resp = xmlhttp.responseText.trim();
+                if (resp === "s") {
+                	refreshCaptcha();
+                	typeCaptcha.value = ''; 
+                    document.getElementById("formSubmission").submit(); // Proceed with form submission
+                } else {
+                    alert("Captcha validation failed. Please try again.");
+                    refreshCaptcha();
+                    typeCaptcha.value = ''; 
+                    // Optionally, you can reset the CAPTCHA input field here
+                }
+            }
+        };
+
+        xmlhttp.send(null);
+
+        return false; // Prevent immediate form submission before validation completes
+    }
+</script>
+
+<script>
+	function show(){
+		var user = $("input:radio[name=user]:checked").val();
+		if(user == 'yes'){
+			//$('#check').show();
+			document. getElementById("id"). disabled = false;
+		}else{
+			//$('#check').hide();
+			document. getElementById("id"). disabled = true;
+		}
+	}
+
+</script>
+	
+<script>
+function validate(){
+	var user = $("input:radio[name=user]:checked").val();
+	if((user != 'yes') && (user != 'no')){
+		alert("Select exiting bus pass user ");
+		document.getElementById('user').focus();
+		return false;
+	}
+	var id = document.getElementById('id').value ;
+	if(user == 'yes'){
+		if(id.length == 0){
+			alert("enter old bus pass id");
+			document.getElementById('id').focus();
+			return false;
+		}
+	}
+	var epass = $("input:radio[name=epass]:checked").val();
+	if((epass != 'ePass') && (epass != 'PrintedPass')){
+		alert("Please choose type of pass ");
+		document.getElementById('epass').focus();
+		return false;
+	}
+	var passtype = document.getElementById('passtype');
+	if (passtype.value == 0) {
+		alert('Please select a category Of Bus Pass');
+		document.getElementById('passtype').focus();
+		return false;
+	}
+	if(passtype.value == 'general'){
+		var generalbustype = document.getElementById('generalbustype').value;
+		if(generalbustype == 0){
+			alert(" please Select type of general bus Pass");
+			document.getElementById('generalbustype').focus();
+			return false;
+		}
+	}
+	if(passtype.value == 'Concessional'){
+		var bustype = document.getElementById('bustype').value;
+		if (bustype == '' || bustype == 0) {
+			alert("please Select type of concessional bus Pass ");
+			document.getElementById("bustype").focus();
+			return false;
+		}
+	}
+	if (passtype.value == 'Delhi Building and other Construction Workers') {
+		var consWorkerbustype = document.getElementById('consWorkerbustype');
+		if (consWorkerbustype.value == 0) {
+			alert('Please select Delhi Building and other Construction Workers bus Pass type');
+			document.getElementById("consWorkerbustype").focus();
+			return false;
+		}
+	}
+}
+	function resetValue(){
+		var passtype = document.getElementById('passtype').value;
+		if(passtype == 'Concessional'){
+			$('#showconsessional').show();
+			$('#showgeneral').hide();
+			$('#showConsWorker').hide();
+// 			$('#ConsWorker').hide();
+		} else if (passtype == 'General'){
+			$('#showgeneral').show();
+			$('#showconsessional').hide();
+			$('#showConsWorker').hide();
+// 			$('#ConsWorker').hide();
+		}else {
+			$('#showConsWorker').show();
+			$('#showgeneral').hide();
+			$('#showconsessional').hide();
+		}
+	}
+	
+
+</script>
+</head>
+<body>
+    <div class="page text-center">
+       
+<header class="page-head header-panel-absolute">
+        <!-- RD Navbar Transparent-->
+        <div class="rd-navbar-wrap">
+          <nav data-md-device-layout="rd-navbar-static" data-lg-device-layout="rd-navbar-static" data-stick-up-offset="210" data-xl-stick-up-offset="85" class="rd-navbar rd-navbar-default" data-lg-auto-height="true" data-auto-height="false" data-md-layout="rd-navbar-static" data-lg-layout="rd-navbar-static" data-lg-stick-up="true">
+            <div class="rd-navbar-inner">
+              <!-- RD Navbar Panel-->
+              <div class="rd-navbar-panel">
+                <!-- RD Navbar Toggle-->
+                <button data-rd-navbar-toggle=".rd-navbar, .rd-navbar-nav-wrap" class="rd-navbar-toggle"><span></span></button>
+                <h4 class="panel-title veil-md">Home</h4>
+                <!-- RD Navbar Right Side Toggle-->
+                <button data-rd-navbar-toggle=".rd-navbar-top-panel" class="rd-navbar-top-panel-toggle veil-md"><span></span></button>
+                <div class="rd-navbar-top-panel">
+                  <div class="rd-navbar-top-panel-left-part">
+                    <ul class="list-unstyled">
+                      <li>
+                        <div class="unit unit-horizontal unit-middle unit-spacing-xs">
+                          <div class="unit-left"><span class="icon mdi mdi-phone text-middle"></span></div>
+                          <div class="unit-body"><a href="callto:#"> <b>011-23752769 - 75 Ext.226.</b> </a> <a href="callto:#" class="reveal-block reveal-md-inline-block"> </a>
+                          </div>
+                        </div>
+                      </li>
+                      <li>
+                        <div class="unit unit-horizontal unit-middle unit-spacing-xs">
+                          <div class="unit-left"><span class="icon mdi mdi-email-open text-middle"></span></div>
+                          <div class="unit-body"><a href="mailto:#"><b> bus-pass@dtc.nic.in</b></a></div>
+                        </div>
+                      </li>
+                    </ul>
+                  </div>
+                  <div class="rd-navbar-top-panel-right-part">
+                    <div class="rd-navbar-top-panel-left-part">
+                      <div class="unit unit-horizontal unit-middle unit-spacing-xs">
+                        <div class="unit-left"><span class="icon mdi mdi-login text-middle"></span></div>
+                        <div class="unit-body"><a href="login.jsp.html"><b>Departmental Login</b></a></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="rd-navbar-menu-wrap clearfix" style="background-color:#07234b;">
+                <!--Navbar Brand-->
+                <div class="rd-navbar-brand"><a href="home.jsp.html" class="reveal-inline-block">
+                    <div class="unit unit-xs-middle unit-xl unit-xl-horizontal unit-spacing-xxs"><br>
+                      <div class="unit-left"><img style="width:127px; height:97px;" src='images/DTC1.png' alt=''></div>
+                      <div class="unit-body text-xl-left">
+                        <div class="rd-navbar-brand-title">Delhi Transport Corporation</div>
+                      </div>
+                    </div></a></div>
+                <div class="rd-navbar-nav-wrap">
+                  <div class="rd-navbar-mobile-scroll">
+                    <div class="rd-navbar-mobile-header-wrap">
+                      <!--Navbar Brand Mobile-->
+                      <div class="rd-navbar-mobile-brand"><a href="home.jsp.html"><img style="width:127px; height:97px;" src='images/DTC1.png' alt=''></a></div>
+                    </div>
+                    <!-- RD Navbar Nav-->
+                    <ul class="rd-navbar-nav">
+                      <li class="active"><a href="home.jsp.html">HOME</a></li>
+                      <li><a class="nav-link" href="apply.html">APPLY FOR BUS PASS</a></li>
+			          <li><a class="nav-link" href="faqs.jsp.html"><b>FAQs</b></a></li>
+			          <li><a class="nav-link" href="#">LOGIN </a>
+							<ul class="rd-navbar-dropdown">
+								<li><a class="nav-link" href="login.jsp.html"><b>Department Login</b></a></li>
+								<li><a class="nav-link" href="mobilesahayaklogin.jsp.html"><b>Mobile-Sahayak Login</b></a></li>
+								<li><a class="nav-link" href="labourLogin.jsp.html"><b>DBOCWWB Department Login</b></a></li>
+							</ul>
+						</li>
+			          <li><a class="nav-link" href="pricecalculator.html"><b>PRICE CALCULATOR</b></a></li>
+			          <li><a class="nav-link" href="getEPass.jsp.html"><b>RE-GENERATE e-PASS</b></a></li>
+			          <li><a class="nav-link" href="status.jsp.html"><b>APPLICATION STATUS</b></a></li>
+			          <li><a class="nav-link" href="#">DOWNLOAD </a>
+							<ul class="rd-navbar-dropdown">
+								<li><a class="nav-link" href="pdf/DTC%20Bus%20Pass%20Form.pdf" target="_blank"><b>Student Bus Form Download</b></a></li>
+							</ul>
+						</li>
+				      <li><a href="contacts.jsp.html"><b>CONTACT US</b></a></li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </nav>
+        </div>
+      </header>
+      <!-- Page Content-->
+      <main class="page-content" style="background-color:#d9eeef;">
+		<section class="section-10 section-md-14">
+          <div class="shell" style="max-width: 1200px;">
+            <div class="range range-xs-center">
+              <div class="cell-xs-20 cell-md-12 offset-top-10 offset-md-top-0 text-left">
+                <div class="inset-md-left-40">
+                <div class="offset-top-30">
+                <div class="quick">
+                  <form class="rd-mailform text-left" id="formSubmission" enctype="multipart/form-data">  
+                  <input type="hidden" name="csrfToken" value="">
+                   <input type="hidden" id="hiddenCaptcha" name="hiddenCaptcha">
+                    <h5 class="text-center" style="color:#01a2a6;">Apply Bus Pass</h5>
+                    <hr class="divider bg-madison hr-sm-left-0">
+                    <p style="color: red; margin-bottom : -10px;margin-left:200px;"><b><u>Instruction :</u></b></p>
+                    <p style="color: red; margin-bottom : -10px; margin-left : 10px;margin-left:200px;">All (*) marked are mandatory</p>
+                     <p style="color: red; margin-bottom : -10px; margin-left : 10px;margin-left:200px;">If you are existing user, Please check your prefilled data.</p>
+                   	<font color="red"><b>  </b></font>
+                  	<div class="range">
+                  		<div class="form-group col-md-12">
+                  			<div class="form-group col-md-2"></div>
+	                  		<div class="form-group col-md-4">
+				      			<label><b>Are you existing Bus Pass User :</b><font color="red"> * </font></label><br>
+				      			<input type="radio" id="user" name="user" value="yes" onclick="show()"> Yes &nbsp &nbsp
+				      			<input type="radio" id="user" name="user" value="no" onclick="show()"> No
+				      		</div>
+				      		<div class="form-group col-md-5" id="check">
+								<label><b>Old Bus Pass Number </b><font color="red">*</font></label>
+								<input type="text" class="form-control" id="id" name="id" placeholder="Enter Old Bus Pass Number" disabled="disabled" onkeypress="return numbersonly(event);">
+								<p class="text-danger" id="error"></p>
+							</div>	
+				    	</div>
+				    	<div class="form-group col-md-12" style="margin-top:5px;">
+				    		<div class="form-group col-md-2"></div>
+				    		<div class="form-group col-md-4">
+				      			<label><b>Which type of pass do you want </b><font color="red">*</font></label><br>
+				      			<input type="radio" id="epass" name="epass" value="ePass" onclick="getfromdate()"> e-Bus Pass &nbsp &nbsp
+				      			<input type="radio" id="epass" name="epass" value="PrintedPass" onclick="getfromdate()"> Conventional(Printed) Bus Pass
+				      		</div>
+				      		<div class="form-group col-md-5">
+				    			<label><b>Select Category of Bus Pass</b> <font color="red">*</font></label>
+								<select class="form-control" name="passtype" id="passtype" onchange="resetValue()">
+					                <option value="0">Select Bus Pass Type </option>
+					                <option value="General"> General Pass </option>
+					                <option value="Concessional"> Concessional Pass </option>
+					                <option value="Delhi Building and other Construction Workers"> Delhi Building and other Construction Workers </option>
+					            </select>
+			    			</div>
+			      		</div>
+			    		<div class="form-group col-md-12" style="display:none;margin-top:5px;" id="showgeneral">
+							<div class="form-group col-md-2"></div>	                  		
+			    			<div class="form-group col-md-4">
+				    			<label><b>Select general bus Pass type</b> <font color="red">*</font></label>
+								<select class="form-control" name="generalbustype" id="generalbustype" onchange="checkgPass()" style="width=102%">
+					                <option value="0">Select Bus Pass Type</option>
+					                
+											<option value="GENERAL ALL ROUTE NON AC PASS"> GENERAL ALL ROUTE NON AC PASS</option>					                     
+					                 
+											<option value="GENERAL ALL ROUTE AC PASS"> GENERAL ALL ROUTE AC PASS</option>					                     
+					                 
+											<option value="AIR PORT EXPRESS AC BUS PASS"> AIR PORT EXPRESS AC BUS PASS</option>					                     
+					                 
+											<option value="DELHI AND NCR AIR PORT AC BUS PASS"> DELHI AND NCR AIR PORT AC BUS PASS</option>					                     
+					                 
+											<option value="DELHI TO BAHADURGARH"> DELHI TO BAHADURGARH</option>					                     
+					                 
+											<option value="DELHI TO GURGAON"> DELHI TO GURGAON</option>					                     
+					                 
+											<option value="DELHI TO GHAZIABAD"> DELHI TO GHAZIABAD</option>					                     
+					                 
+											<option value="DELHI TO FARIDABAD"> DELHI TO FARIDABAD</option>					                     
+					                 
+					            </select>
+			    			</div>
+			    		</div>
+			    		<div class="form-group col-md-12" style="display:none;margin-top:5px;" id="showconsessional">
+			    			<div class="form-group col-md-2"></div>	    
+			    			<div class="form-group col-md-4">
+				    			<label><b>Select concessional bus Pass type</b> <font color="red">*</font></label>
+								<select class="form-control" name="bustype" id="bustype" style="width=102%">
+					                <option value="0">Select Bus Pass Type</option>
+					                
+											<option value="Senior Citizen All Route Non AC"> Senior Citizen All Route Non AC</option>					                     
+					                 
+											<option value="Senior Citizen All Route AC"> Senior Citizen All Route AC</option>					                     
+					                 
+											<option value="Student All route AC/Non AC "> Student All route AC/Non AC </option>					                     
+					                 
+											<option value="Student Special All route AC/Non AC"> Student Special All route AC/Non AC</option>					                     
+					                 
+											<option value="PRS/AAY All route Non AC"> PRS/AAY All route Non AC</option>					                     
+					                 
+											<option value="War widows and dependant Children All route Non AC"> War widows and dependant Children All route Non AC</option>					                     
+					                 
+											<option value="National Awardees All route Non AC"> National Awardees All route Non AC</option>					                     
+					                 
+											<option value="International Sports Persons All route Non AC"> International Sports Persons All route Non AC</option>					                     
+					                 
+											<option value="MP All route AC/Non AC"> MP All route AC/Non AC</option>					                     
+					                 
+											<option value="MP's Attendant All route AC/Non AC"> MP's Attendant All route AC/Non AC</option>					                     
+					                 
+											<option value="MLA All route AC/Non AC"> MLA All route AC/Non AC</option>					                     
+					                 
+											<option value="MLA's Attendant All route AC/Non AC"> MLA's Attendant All route AC/Non AC</option>					                     
+					                 
+											<option value="Freedom Fighters Non AC"> Freedom Fighters Non AC</option>					                     
+					                 
+											<option value="Media Person All route city and NCR Non AC"> Media Person All route city and NCR Non AC</option>					                     
+					                 
+											<option value="Media Person All route city and NCR AC"> Media Person All route city and NCR AC</option>					                     
+					                 
+											<option value="Divyangjan (Ortho)(FP) All route AC/Non AC City Services only"> Divyangjan (Ortho)(FP) All route AC/Non AC City Services only</option>					                     
+					                 
+											<option value="Divyangjan (Blind)(FP) All routes AC/Non AC City & NCR Service only with one attendant who shall be charged half of adult fare"> Divyangjan (Blind)(FP) All routes AC/Non AC City & NCR Service only with one attendant who shall be charged half of adult fare</option>					                     
+					                 
+											<option value="Divyangjan (Deaf & Dumb) (FP) All routes AC/Non AC City Services only"> Divyangjan (Deaf & Dumb) (FP) All routes AC/Non AC City Services only</option>					                     
+					                 
+											<option value="Divyangjan(Mental Illness)(FP) All routes AC/Non AC City Services only with one attendant free"> Divyangjan(Mental Illness)(FP) All routes AC/Non AC City Services only with one attendant free</option>					                     
+					                 
+											<option value="Student Destination Pass"> Student Destination Pass</option>					                     
+					                 
+											<option value="Members Of MCD All route AC/Non AC"> Members Of MCD All route AC/Non AC</option>					                     
+					                 
+											<option value="Widow of freedom Fighter (FP) All Route Non-AC Bus Pass"> Widow of freedom Fighter (FP) All Route Non-AC Bus Pass</option>					                     
+					                 
+					            </select>
+					        </div>
+				       </div>
+				       <div class="form-group col-md-12" style="display:none;margin-top:5px;" id="showConsWorker">
+				       		<div class="form-group col-md-2"></div>	    
+					        <div class="form-group col-md-6">
+					        	 <p style="color: red;">
+					        	 Eligibility:-<br>
+      								I. Applicant should completed one year membership of the Board as on date of application of DTC Pass.<br>
+      								II. Applicant should be live member of the Board as on date of application of DTC Pass.
+					        	 </p>
+				    			<label><b>Select Delhi Building and other Construction Workers bus Pass type</b> <font color="red">*</font></label>
+								<select class="form-control" name="consWorkerbustype" id="consWorkerbustype" onchange="checkWorkerPasstype()" style="width=102%">
+<!-- 					                <option value="0">Select Bus Pass Type</option> -->
+					                
+											<option value="Delhi Building and other Construction Workers all route Non-AC"> Delhi Building and other Construction Workers all route Non-AC</option>					                     
+					                 
+					            </select>
+			    			</div>
+			    		</div>
+			    		
+			    		<!-- Added Fields for Backend Integration -->
+			    		<div class="form-group col-md-12" style="margin-top: 15px;">
+			    			<div class="form-group col-md-2"></div>
+			    			<div class="form-group col-md-4">
+			    				<label><b>Full Name </b><font color="red">*</font></label>
+			    				<input type="text" class="form-control" name="name" id="name" placeholder="Enter Full Name" required>
+			    			</div>
+			    			<div class="form-group col-md-4">
+			    				<label><b>Mobile Number </b><font color="red">*</font></label>
+			    				<input type="text" class="form-control" name="mobile" id="mobile" placeholder="Enter Mobile No" maxlength="10" required>
+			    			</div>
+			    		</div>
+
+			    		<div class="form-group col-md-12" style="margin-top: 15px;">
+			    			<div class="form-group col-md-2"></div>
+			    			<div class="form-group col-md-4">
+			    				<label><b>Date of Birth </b><font color="red">*</font></label>
+			    				<input type="date" class="form-control" name="dob" id="dob" required>
+			    			</div>
+			    			<div class="form-group col-md-4">
+			    				<label><b>Upload Photo </b><font color="red">*</font></label>
+			    				<input type="file" class="form-control" name="photo" id="photo" accept="image/*" required>
+			    			</div>
+			    		</div>
+
+                   		<div class="form-group col-md-12" style="text-align:center;margin-top:30px;">
+		                      <button type="submit" class="btn btn-primary" style="padding: 7px 35px;width:250px;">SUBMIT</button><br><br><br>
+	                 	</div>
+	                 </div>
+                  </form>
+
+				  <script>
+				  document.getElementById('formSubmission').addEventListener('submit', async function(e) {
+					  e.preventDefault();
+					  
+					  if (!validate()) return false;
+
+					  const submitBtn = this.querySelector('button[type="submit"]');
+					  submitBtn.innerText = "Processing...";
+					  submitBtn.disabled = true;
+
+					  const formData = new FormData(this);
+
+					  try {
+						  const response = await fetch('http://localhost:5000/api/passes/apply', {
+							  method: 'POST',
+							  body: formData
+						  });
+
+						  const result = await response.json();
+
+						  if (response.ok && result.success) {
+							  alert("Application Submitted Successfully!");
+							  window.location.href = result.redirectUrl;
+						  } else {
+							  alert("Error: " + (result.error || "Failed to submit application."));
+							  submitBtn.innerText = "SUBMIT";
+							  submitBtn.disabled = false;
+						  }
+					  } catch (error) {
+						  console.error("Error submitting form:", error);
+						  alert("Server error. Please make sure the backend is running on port 5000.");
+						  submitBtn.innerText = "SUBMIT";
+						  submitBtn.disabled = false;
+					  }
+				  });
+				  </script>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          </div>
+        </section>        
+      <br>
+      </main>
+      <!-- Corporate footer-->
+      <footer class="section-50 page-footer bg-catskill" style="background-color:#01a2a6;">
+        <div class="shell">
+          <div class="range range-xs-center range-sm-middle text-md-left">
+            <div class="cell-xs-10 cell-md-4 text-md-right offset-top-20 offset-md-top-0">
+              <p class="barnd-name text-ubold" style="color:black;"> <b>Copyright &copy;  - Delhi e-Governance Society</b>&nbsp;<span id="copyright-year"></span></p>
+              <!-- {%FOOTER_LINK}-->
+            </div>
+          </div>
+        </div>
+      </footer>
+    </div>
+    <!-- Global Mailform Output-->
+    <div id="form-output-global" class="snackbars"></div>
+    <!-- Java script-->
+    <script src="js/core.min.js"></script>
+    <script src="js/script.js"></script>
+  </body>
+</html>

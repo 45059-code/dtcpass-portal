@@ -1,0 +1,260 @@
+Uri: http://dtcpass.delhi.gov.in/
+File Name: D:\dtcpass.delhi.gov.in\index.htm
+Content Type: text/html
+
+Uri: http://dtcpass.delhi.gov.in/apply
+File Name: D:\dtcpass.delhi.gov.in\apply.html
+Content Type: text/html
+
+Uri: http://dtcpass.delhi.gov.in/calender/bootstrap-datepicker.min.js
+File Name: D:\dtcpass.delhi.gov.in\calender\bootstrap-datepicker.min.js
+Content Type: application/javascript
+
+Uri: http://dtcpass.delhi.gov.in/calender/bootstrap-datepicker3.css
+File Name: D:\dtcpass.delhi.gov.in\calender\bootstrap-datepicker3.css
+Content Type: text/css
+
+Uri: http://dtcpass.delhi.gov.in/calender/jquery-1.11.3.min.js
+File Name: D:\dtcpass.delhi.gov.in\calender\jquery-1.11.3.min.js
+Content Type: application/javascript
+
+Uri: http://dtcpass.delhi.gov.in/captchaServlet
+File Name: D:\dtcpass.delhi.gov.in\captchaServlet
+Content Type: image/png
+
+Uri: http://dtcpass.delhi.gov.in/contacts.jsp
+File Name: D:\dtcpass.delhi.gov.in\contacts.jsp.html
+Content Type: text/html
+
+Uri: http://dtcpass.delhi.gov.in/css/Flaticon.html
+File Name: D:\dtcpass.delhi.gov.in\css (1)\Flaticon.html
+Content Type: text/html
+
+Uri: http://dtcpass.delhi.gov.in/css/style.css
+File Name: D:\dtcpass.delhi.gov.in\css (1)\style.css
+Content Type: text/css
+
+Uri: http://dtcpass.delhi.gov.in/faqs.jsp
+File Name: D:\dtcpass.delhi.gov.in\faqs.jsp.html
+Content Type: text/html
+
+Uri: http://dtcpass.delhi.gov.in/fonts/Flaticon.eot
+File Name: D:\dtcpass.delhi.gov.in\fonts\Flaticon.eot
+Content Type: application/vnd.ms-fontobject
+
+Uri: http://dtcpass.delhi.gov.in/fonts/Flaticon.svg
+File Name: D:\dtcpass.delhi.gov.in\fonts\Flaticon.svg
+Content Type: image/svg+xml
+
+Uri: http://dtcpass.delhi.gov.in/fonts/Flaticon.ttf
+File Name: D:\dtcpass.delhi.gov.in\fonts\Flaticon.ttf
+Content Type: font/ttf
+
+Uri: http://dtcpass.delhi.gov.in/fonts/Flaticon.woff
+File Name: D:\dtcpass.delhi.gov.in\fonts\Flaticon.woff
+Content Type: font/woff
+
+Uri: http://dtcpass.delhi.gov.in/fonts/Flaticond41d.eot?
+File Name: D:\dtcpass.delhi.gov.in\fonts\Flaticond41d.eot
+Content Type: application/vnd.ms-fontobject
+
+Uri: http://dtcpass.delhi.gov.in/fonts/fontawesome-webfont3295.eot?v=4.5.0
+File Name: D:\dtcpass.delhi.gov.in\fonts\fontawesome-webfont3295.eot
+Content Type: application/vnd.ms-fontobject
+
+Uri: http://dtcpass.delhi.gov.in/fonts/fontawesome-webfont3295.svg?v=4.5.0
+File Name: D:\dtcpass.delhi.gov.in\fonts\fontawesome-webfont3295.svg
+Content Type: image/svg+xml
+
+Uri: http://dtcpass.delhi.gov.in/fonts/fontawesome-webfont3295.ttf?v=4.5.0
+File Name: D:\dtcpass.delhi.gov.in\fonts\fontawesome-webfont3295.ttf
+Content Type: font/ttf
+
+Uri: http://dtcpass.delhi.gov.in/fonts/fontawesome-webfont3295.woff2?v=4.5.0
+File Name: D:\dtcpass.delhi.gov.in\fonts\fontawesome-webfont3295.woff2
+Content Type: font/woff2
+
+Uri: http://dtcpass.delhi.gov.in/fonts/fontawesome-webfont3295.woff?v=4.5.0
+File Name: D:\dtcpass.delhi.gov.in\fonts\fontawesome-webfont3295.woff
+Content Type: font/woff
+
+Uri: http://dtcpass.delhi.gov.in/fonts/fontawesome-webfontd41d.eot?
+File Name: D:\dtcpass.delhi.gov.in\fonts\fontawesome-webfontd41d.eot
+Content Type: application/vnd.ms-fontobject
+
+Uri: http://dtcpass.delhi.gov.in/fonts/glyphicons-halflings-regular.eot
+File Name: D:\dtcpass.delhi.gov.in\fonts\glyphicons-halflings-regular.eot
+Content Type: application/vnd.ms-fontobject
+
+Uri: http://dtcpass.delhi.gov.in/fonts/glyphicons-halflings-regular.svg
+File Name: D:\dtcpass.delhi.gov.in\fonts\glyphicons-halflings-regular.svg
+Content Type: image/svg+xml
+
+Uri: http://dtcpass.delhi.gov.in/fonts/glyphicons-halflings-regular.ttf
+File Name: D:\dtcpass.delhi.gov.in\fonts\glyphicons-halflings-regular.ttf
+Content Type: font/ttf
+
+Uri: http://dtcpass.delhi.gov.in/fonts/glyphicons-halflings-regular.woff
+File Name: D:\dtcpass.delhi.gov.in\fonts\glyphicons-halflings-regular.woff
+Content Type: font/woff
+
+Uri: http://dtcpass.delhi.gov.in/fonts/glyphicons-halflings-regular.woff2
+File Name: D:\dtcpass.delhi.gov.in\fonts\glyphicons-halflings-regular.woff2
+Content Type: font/woff2
+
+Uri: http://dtcpass.delhi.gov.in/fonts/glyphicons-halflings-regulard41d.eot?
+File Name: D:\dtcpass.delhi.gov.in\fonts\glyphicons-halflings-regulard41d.eot
+Content Type: application/vnd.ms-fontobject
+
+Uri: http://dtcpass.delhi.gov.in/fonts/materialdesignicons-webfont14e6.eot?v=1.4.57
+File Name: D:\dtcpass.delhi.gov.in\fonts\materialdesignicons-webfont14e6.eot
+Content Type: application/vnd.ms-fontobject
+
+Uri: http://dtcpass.delhi.gov.in/fonts/materialdesignicons-webfont14e6.svg?v=1.4.57
+File Name: D:\dtcpass.delhi.gov.in\fonts\materialdesignicons-webfont14e6.svg
+Content Type: image/svg+xml
+
+Uri: http://dtcpass.delhi.gov.in/fonts/materialdesignicons-webfont14e6.ttf?v=1.4.57
+File Name: D:\dtcpass.delhi.gov.in\fonts\materialdesignicons-webfont14e6.ttf
+Content Type: font/ttf
+
+Uri: http://dtcpass.delhi.gov.in/fonts/materialdesignicons-webfont14e6.woff2?v=1.4.57
+File Name: D:\dtcpass.delhi.gov.in\fonts\materialdesignicons-webfont14e6.woff2
+Content Type: font/woff2
+
+Uri: http://dtcpass.delhi.gov.in/fonts/materialdesignicons-webfont14e6.woff?v=1.4.57
+File Name: D:\dtcpass.delhi.gov.in\fonts\materialdesignicons-webfont14e6.woff
+Content Type: font/woff
+
+Uri: http://dtcpass.delhi.gov.in/fonts/materialdesignicons-webfontd41d.eot?
+File Name: D:\dtcpass.delhi.gov.in\fonts\materialdesignicons-webfontd41d.eot
+Content Type: application/vnd.ms-fontobject
+
+Uri: http://dtcpass.delhi.gov.in/getEPass.jsp
+File Name: D:\dtcpass.delhi.gov.in\getEPass.jsp.html
+Content Type: text/html
+
+Uri: http://dtcpass.delhi.gov.in/home.jsp
+File Name: D:\dtcpass.delhi.gov.in\home.jsp.html
+Content Type: text/html
+
+Uri: http://dtcpass.delhi.gov.in/images/ajax-loader.gif
+File Name: D:\dtcpass.delhi.gov.in\images\ajax-loader.gif
+Content Type: image/gif
+
+Uri: http://dtcpass.delhi.gov.in/images/DTC1.png
+File Name: D:\dtcpass.delhi.gov.in\images\DTC1.png
+Content Type: image/png
+
+Uri: http://dtcpass.delhi.gov.in/images/photoswipe-controls.png
+File Name: D:\dtcpass.delhi.gov.in\images\photoswipe-controls.png
+Content Type: image/png
+
+Uri: http://dtcpass.delhi.gov.in/images/photoswipe-controls.svg
+File Name: D:\dtcpass.delhi.gov.in\images\photoswipe-controls.svg
+Content Type: image/svg+xml
+
+Uri: http://dtcpass.delhi.gov.in/images/preloader.html
+File Name: D:\dtcpass.delhi.gov.in\images\preloader.html
+Content Type: text/html
+
+Uri: http://dtcpass.delhi.gov.in/images/refresh.png
+File Name: D:\dtcpass.delhi.gov.in\images\refresh.png
+Content Type: image/png
+
+Uri: http://dtcpass.delhi.gov.in/js/core.min.js
+File Name: D:\dtcpass.delhi.gov.in\js\core.min.js
+Content Type: application/javascript
+
+Uri: http://dtcpass.delhi.gov.in/js/crypto-js/core.js
+File Name: D:\dtcpass.delhi.gov.in\js\crypto-js\core.js
+Content Type: application/javascript
+
+Uri: http://dtcpass.delhi.gov.in/js/crypto-js/sha256.js
+File Name: D:\dtcpass.delhi.gov.in\js\crypto-js\sha256.js
+Content Type: application/javascript
+
+Uri: http://dtcpass.delhi.gov.in/js/script.js
+File Name: D:\dtcpass.delhi.gov.in\js\script.js
+Content Type: application/javascript
+
+Uri: http://dtcpass.delhi.gov.in/js/validation.js
+File Name: D:\dtcpass.delhi.gov.in\js\validation.js
+Content Type: application/javascript
+
+Uri: http://dtcpass.delhi.gov.in/labourLogin.jsp
+File Name: D:\dtcpass.delhi.gov.in\labourLogin.jsp.html
+Content Type: text/html
+
+Uri: http://dtcpass.delhi.gov.in/login.jsp
+File Name: D:\dtcpass.delhi.gov.in\login.jsp.html
+Content Type: text/html
+
+Uri: http://dtcpass.delhi.gov.in/mobilesahayaklogin.jsp
+File Name: D:\dtcpass.delhi.gov.in\mobilesahayaklogin.jsp.html
+Content Type: text/html
+
+Uri: http://dtcpass.delhi.gov.in/pdf/DTC Bus Pass Form.pdf
+File Name: D:\dtcpass.delhi.gov.in\pdf\DTC Bus Pass Form.pdf
+Content Type: application/pdf
+
+Uri: http://dtcpass.delhi.gov.in/pricecalculator
+File Name: D:\dtcpass.delhi.gov.in\pricecalculator.html
+Content Type: text/html
+
+Uri: http://dtcpass.delhi.gov.in/status.jsp
+File Name: D:\dtcpass.delhi.gov.in\status.jsp.html
+Content Type: text/html
+
+Uri: http://fonts.googleapis.com/css?family=Open+Sans:400,300italic,300,400italic,600,700|Merriweather:400,300,300italic,400italic,700,700italic
+File Name: D:\dtcpass.delhi.gov.in\css
+Content Type: text/css
+
+Uri: http://fonts.gstatic.com/s/merriweather/v33/u-4B0qyriQwlOrhSvowK_l5-eTxCVx0ZbwLvKH2Gk9hLmp0v5yA-xXPqCzLvPee1XYk_XSf-FmQlV233AvQ.ttf
+File Name: D:\dtcpass.delhi.gov.in\s\merriweather\v33\u-4B0qyriQwlOrhSvowK_l5-eTxCVx0ZbwLvKH2Gk9hLmp0v5yA-xXPqCzLvPee1XYk_XSf-FmQlV233AvQ.ttf
+Content Type: font/ttf
+
+Uri: http://fonts.gstatic.com/s/merriweather/v33/u-4B0qyriQwlOrhSvowK_l5-eTxCVx0ZbwLvKH2Gk9hLmp0v5yA-xXPqCzLvPee1XYk_XSf-FmScUG33AvQ.ttf
+File Name: D:\dtcpass.delhi.gov.in\s\merriweather\v33\u-4B0qyriQwlOrhSvowK_l5-eTxCVx0ZbwLvKH2Gk9hLmp0v5yA-xXPqCzLvPee1XYk_XSf-FmScUG33AvQ.ttf
+Content Type: font/ttf
+
+Uri: http://fonts.gstatic.com/s/merriweather/v33/u-4B0qyriQwlOrhSvowK_l5-eTxCVx0ZbwLvKH2Gk9hLmp0v5yA-xXPqCzLvPee1XYk_XSf-FmTCUG33AvQ.ttf
+File Name: D:\dtcpass.delhi.gov.in\s\merriweather\v33\u-4B0qyriQwlOrhSvowK_l5-eTxCVx0ZbwLvKH2Gk9hLmp0v5yA-xXPqCzLvPee1XYk_XSf-FmTCUG33AvQ.ttf
+Content Type: font/ttf
+
+Uri: http://fonts.gstatic.com/s/merriweather/v33/u-4D0qyriQwlOrhSvowK_l5UcA6zuSYEqOzpPe3HOZJ5eX1WtLaQwmYiScCmDxhtNOKl8yDr3icaFF3w.ttf
+File Name: D:\dtcpass.delhi.gov.in\s\merriweather\v33\u-4D0qyriQwlOrhSvowK_l5UcA6zuSYEqOzpPe3HOZJ5eX1WtLaQwmYiScCmDxhtNOKl8yDr3icaFF3w.ttf
+Content Type: font/ttf
+
+Uri: http://fonts.gstatic.com/s/merriweather/v33/u-4D0qyriQwlOrhSvowK_l5UcA6zuSYEqOzpPe3HOZJ5eX1WtLaQwmYiScCmDxhtNOKl8yDrgCcaFF3w.ttf
+File Name: D:\dtcpass.delhi.gov.in\s\merriweather\v33\u-4D0qyriQwlOrhSvowK_l5UcA6zuSYEqOzpPe3HOZJ5eX1WtLaQwmYiScCmDxhtNOKl8yDrgCcaFF3w.ttf
+Content Type: font/ttf
+
+Uri: http://fonts.gstatic.com/s/merriweather/v33/u-4D0qyriQwlOrhSvowK_l5UcA6zuSYEqOzpPe3HOZJ5eX1WtLaQwmYiScCmDxhtNOKl8yDrOSAaFF3w.ttf
+File Name: D:\dtcpass.delhi.gov.in\s\merriweather\v33\u-4D0qyriQwlOrhSvowK_l5UcA6zuSYEqOzpPe3HOZJ5eX1WtLaQwmYiScCmDxhtNOKl8yDrOSAaFF3w.ttf
+Content Type: font/ttf
+
+Uri: http://fonts.gstatic.com/s/opensans/v44/memQYaGs126MiZpBA-UFUIcVXSCEkx2cmqvXlWq8tWZ0Pw86hd0Rk5hkWVAexQ.ttf
+File Name: D:\dtcpass.delhi.gov.in\s\opensans\v44\memQYaGs126MiZpBA-UFUIcVXSCEkx2cmqvXlWq8tWZ0Pw86hd0Rk5hkWVAexQ.ttf
+Content Type: font/ttf
+
+Uri: http://fonts.gstatic.com/s/opensans/v44/memQYaGs126MiZpBA-UFUIcVXSCEkx2cmqvXlWq8tWZ0Pw86hd0Rk8ZkWVAexQ.ttf
+File Name: D:\dtcpass.delhi.gov.in\s\opensans\v44\memQYaGs126MiZpBA-UFUIcVXSCEkx2cmqvXlWq8tWZ0Pw86hd0Rk8ZkWVAexQ.ttf
+Content Type: font/ttf
+
+Uri: http://fonts.gstatic.com/s/opensans/v44/memSYaGs126MiZpBA-UvWbX2vVnXBbObj2OVZyOOSr4dVJWUgsg-1x4gaVc.ttf
+File Name: D:\dtcpass.delhi.gov.in\s\opensans\v44\memSYaGs126MiZpBA-UvWbX2vVnXBbObj2OVZyOOSr4dVJWUgsg-1x4gaVc.ttf
+Content Type: font/ttf
+
+Uri: http://fonts.gstatic.com/s/opensans/v44/memSYaGs126MiZpBA-UvWbX2vVnXBbObj2OVZyOOSr4dVJWUgsgH1x4gaVc.ttf
+File Name: D:\dtcpass.delhi.gov.in\s\opensans\v44\memSYaGs126MiZpBA-UvWbX2vVnXBbObj2OVZyOOSr4dVJWUgsgH1x4gaVc.ttf
+Content Type: font/ttf
+
+Uri: http://fonts.gstatic.com/s/opensans/v44/memSYaGs126MiZpBA-UvWbX2vVnXBbObj2OVZyOOSr4dVJWUgsiH0B4gaVc.ttf
+File Name: D:\dtcpass.delhi.gov.in\s\opensans\v44\memSYaGs126MiZpBA-UvWbX2vVnXBbObj2OVZyOOSr4dVJWUgsiH0B4gaVc.ttf
+Content Type: font/ttf
+
+Uri: http://fonts.gstatic.com/s/opensans/v44/memSYaGs126MiZpBA-UvWbX2vVnXBbObj2OVZyOOSr4dVJWUgsjZ0B4gaVc.ttf
+File Name: D:\dtcpass.delhi.gov.in\s\opensans\v44\memSYaGs126MiZpBA-UvWbX2vVnXBbObj2OVZyOOSr4dVJWUgsjZ0B4gaVc.ttf
+Content Type: font/ttf
+
