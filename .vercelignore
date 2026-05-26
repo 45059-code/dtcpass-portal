@@ -1,0 +1,9 @@
+backend/
+server.py
+*.py
+*.ps1
+*.bat
+github_upload.json
+render.yaml
+*.log
+__pycache__/

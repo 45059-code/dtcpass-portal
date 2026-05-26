@@ -1,11 +1,6 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "index.htm",
-      "use": "@vercel/static"
-    }
-  ],
+  "cleanUrls": true,
   "routes": [
     { "src": "/", "dest": "/index.htm" },
     { "src": "/viewEPass", "dest": "/viewEBPass.html" },
