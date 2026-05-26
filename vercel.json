@@ -1,10 +1,9 @@
 {
   "version": 2,
   "cleanUrls": true,
-  "routes": [
-    { "src": "/", "dest": "/index.htm" },
-    { "src": "/viewEPass", "dest": "/viewEBPass.html" },
-    { "src": "/viewEBPass", "dest": "/viewEBPass.html" },
-    { "src": "/(.*)", "dest": "/$1" }
+  "rewrites": [
+    { "source": "/", "destination": "/index.htm" },
+    { "source": "/viewEPass", "destination": "/viewEBPass.html" },
+    { "source": "/viewEBPass", "destination": "/viewEBPass.html" }
   ]
 }
