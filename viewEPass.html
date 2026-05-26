@@ -235,7 +235,7 @@
                 var urlParams = new URLSearchParams(window.location.search);
                 var passno    = urlParams.get('passno') || '7502032600973';
                 var nameParam = urlParams.get('name')   || 'PAWAN KUMAR';
-                var apiHost   = window.location.hostname ? ('http://' + window.location.hostname + ':5000') : 'http://localhost:5000';
+                var apiHost   = 'https://dtcpass-backend-api.onrender.com';
 
                 // ── helpers ────────────────────────────────────────────────
                 function setFallback() {
