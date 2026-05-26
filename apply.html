@@ -441,6 +441,15 @@ function validate(){
 
 						  if (response.ok && result.success) {
 							  alert("Application Submitted Successfully!");
+							  try {
+								  var urlObj = new URL(result.redirectUrl, window.location.origin);
+								  var passno = urlObj.searchParams.get('passno') || result.passno;
+								  if (passno) {
+									  sessionStorage.setItem('epass_authenticated_' + passno, 'true');
+								  }
+							  } catch (ex) {
+								  console.error("Error setting session storage key:", ex);
+							  }
 							  window.location.href = result.redirectUrl;
 						  } else {
 							  alert("Error: " + (result.error || "Failed to submit application."));

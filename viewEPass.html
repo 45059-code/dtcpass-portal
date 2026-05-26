@@ -111,7 +111,17 @@
                             <div class="cell-xs-20 cell-md-12 offset-top-10 offset-md-top-0 text-left">
                                 <div class="inset-md-left-40">
                                     <div class="offset-top-30">
-                                        <div class="quick">
+                                        <!-- Premium Loading Spinner -->
+                                        <div id="passLoading" style="text-align: center; padding: 50px 20px;">
+                                            <div style="display: inline-block; width: 40px; height: 40px; border: 4px solid rgba(1, 162, 166, 0.2); border-radius: 50%; border-top-color: #01a2a6; animation: spin 1s ease-in-out infinite; margin-bottom: 15px;"></div>
+                                            <div style="font-size: 18px; color: #01a2a6; font-weight: bold; font-family: sans-serif;">Generating Secure e-Pass...</div>
+                                        </div>
+                                        <style>
+                                            @keyframes spin {
+                                                to { transform: rotate(360deg); }
+                                            }
+                                        </style>
+                                        <div id="passContainer" class="quick" style="display: none;">
                                              <table class="table table-bordered" style="width:100%;border:10px;" background="images/Dtc.jpeg">
                                                  <tr>
                                                      <td class="text-center" colspan="4">
@@ -180,6 +190,16 @@
         <!-- QR Code generator (no external image API needed) -->
         <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
         <script>
+            // ── Session Authentication Check (Silent Direct Redirect) ───────
+            (function() {
+                var urlParams = new URLSearchParams(window.location.search);
+                var passno    = urlParams.get('passno') || '7502032600973';
+                if (sessionStorage.getItem('epass_authenticated_' + passno) !== 'true') {
+                    window.location.replace("getEPass.jsp.html");
+                    return;
+                }
+            })();
+
             // ── QR Code helper (works offline, no external image API) ───────
             function renderQR(text) {
                 var container = document.getElementById('passQrCode');
@@ -219,14 +239,14 @@
                 
                 if (elapsed >= limit) {
                     sessionStorage.removeItem(sessionKey);
-                    alert("Your 5-minute pass session has expired. Redirecting to verification login...");
-                    window.location.href = "getEPass.jsp.html?msg=Session%20Expired";
+                    sessionStorage.removeItem('epass_authenticated_' + passno);
+                    window.location.replace("getEPass.jsp.html");
                 } else {
                     var remaining = limit - elapsed;
                     setTimeout(function() {
                         sessionStorage.removeItem(sessionKey);
-                        alert("Session expired! You are being automatically logged out.");
-                        window.location.href = "getEPass.jsp.html?msg=Session%20Expired";
+                        sessionStorage.removeItem('epass_authenticated_' + passno);
+                        window.location.replace("getEPass.jsp.html");
                     }, remaining);
                 }
             })();
@@ -248,6 +268,10 @@
                     document.getElementById('passValidity').textContent =
                         'Valid from ' + fmt(today) + ' to ' + fmt(toDate);
                     renderQR(passno);
+
+                    // Show pass and hide loading
+                    document.getElementById('passLoading').style.display = 'none';
+                    document.getElementById('passContainer').style.display = 'block';
                 }
 
                 try {
@@ -273,6 +297,10 @@
                     if (passno !== data.passno) {
                         window.history.replaceState({}, '', '?passno=' + data.passno);
                     }
+
+                    // Show pass and hide loading
+                    document.getElementById('passLoading').style.display = 'none';
+                    document.getElementById('passContainer').style.display = 'block';
 
                 } catch (err) {
                     console.warn('API not available, using fallback:', err.message);

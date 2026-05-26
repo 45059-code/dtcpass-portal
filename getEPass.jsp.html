@@ -349,6 +349,7 @@
             .then(passData => {
                 if (btn) btn.disabled = false;
                 if (passData && passData.passno) {
+                    sessionStorage.setItem('epass_authenticated_' + passData.passno, 'true');
                     window.location.href = "viewEBPass.html?passno=" + passData.passno;
                 } else {
                     alert("Pass No doesn't exists.");
@@ -390,6 +391,7 @@
             if (btn) btn.disabled = false;
             if (data.exists && data.pass) {
                 // If already exists, redirect directly
+                sessionStorage.setItem('epass_authenticated_' + data.pass.passno, 'true');
                 window.location.href = "viewEBPass.html?passno=" + data.pass.passno;
             } else {
                 // Alert popup: "Pass No doesn't exists."
@@ -431,6 +433,7 @@
 
     function redirectToPass() {
         if (currentPassNo) {
+            sessionStorage.setItem('epass_authenticated_' + currentPassNo, 'true');
             window.location.href = "viewEBPass.html?passno=" + currentPassNo;
         } else {
             alert("Error: Pass number not found.");
@@ -494,6 +497,7 @@
             }
             if (data.success && data.passno) {
                 alert("e-BusPass generated successfully! Pass Number: " + data.passno);
+                sessionStorage.setItem('epass_authenticated_' + data.passno, 'true');
                 window.location.href = "viewEBPass.html?passno=" + data.passno;
             } else {
                 alert("Failed to generate e-BusPass.");
@@ -549,12 +553,9 @@
 	} 
 	</script>
 	<script>
-	// ── Session Expiry Query Listener ──────────────────────────────────────
-	window.addEventListener('DOMContentLoaded', function() {
-		var urlParams = new URLSearchParams(window.location.search);
-		if (urlParams.get('msg') === 'Session Expired') {
-			alert("⚠️ Security Alert: Your active e-BusPass session has expired (5-minute limit reached).\n\nPlease verify your details again to view your pass.");
-		}
+	// Clear any active pass session when loading the page (including via back button)
+	window.addEventListener('pageshow', function() {
+		sessionStorage.clear();
 	});
 	</script>
 </html>
