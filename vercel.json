@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "index.htm",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    { "src": "/", "dest": "/index.htm" },
+    { "src": "/viewEPass", "dest": "/viewEBPass.html" },
+    { "src": "/viewEBPass", "dest": "/viewEBPass.html" },
+    { "src": "/(.*)", "dest": "/$1" }
+  ]
+}
