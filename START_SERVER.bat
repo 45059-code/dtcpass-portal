@@ -45,7 +45,7 @@ echo Python found: %PYTHON%
 echo.
 echo Starting servers...
 echo.
-echo   Home page : http://localhost:8000/index.htm
+echo   Home page : http://localhost:8000/index.html
 echo   ePass     : http://localhost:8000/viewEBPass.html?passno=7502032600973
 echo.
 echo Open one of the above links in Chrome.

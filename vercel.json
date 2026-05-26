@@ -1,9 +1,4 @@
 {
   "version": 2,
-  "cleanUrls": true,
-  "rewrites": [
-    { "source": "/", "destination": "/index.htm" },
-    { "source": "/viewEPass", "destination": "/viewEBPass.html" },
-    { "source": "/viewEBPass", "destination": "/viewEBPass.html" }
-  ]
+  "cleanUrls": true
 }

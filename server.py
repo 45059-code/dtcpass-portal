@@ -43,7 +43,7 @@ MIME = {
 }
 
 REDIRECTS = {
-    "/":           "/index.htm",
+    "/":           "/index.html",
     "/viewEPass":  "/viewEBPass.html",
     "/viewEBPass": "/viewEBPass.html",
 }
@@ -142,9 +142,9 @@ async def handle(reader: asyncio.StreamReader,
             await writer.drain()
             return
 
-        # If directory → try index.htm
+        # If directory → try index.html
         if os.path.isdir(file_path):
-            file_path = os.path.join(file_path, "index.htm")
+            file_path = os.path.join(file_path, "index.html")
 
         if os.path.isfile(file_path):
             with open(file_path, "rb") as fh:
@@ -192,7 +192,7 @@ async def run():
     print("  DTC e-Bus Pass  –  Frontend Server", flush=True)
     print(f"  Serving : {ROOT}", flush=True)
     print(flush=True)
-    print(f"  Home    : http://localhost:{bound_port}/index.htm", flush=True)
+    print(f"  Home    : http://localhost:{bound_port}/index.html", flush=True)
     print(f"  ePass   : http://localhost:{bound_port}/viewEBPass.html"
           f"?passno=7502032600973", flush=True)
     print(f"  Admin   : http://localhost:{bound_port}/registeredUsers.html",
