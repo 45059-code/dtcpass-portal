@@ -17,7 +17,7 @@ import os
 
 # ─────────────────────────────────────────────
 # FILL IN YOUR DETAILS HERE
-GITHUB_TOKEN = "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"   # Paste your token
+GITHUB_TOKEN = "YOUR_GITHUB_TOKEN_HERE"   # Paste your token
 REPO_OWNER   = "45059-code"               # Your GitHub username
 REPO_NAME    = "dtcpass-portal"           # Your repo name
 BRANCH       = "main"
@@ -29,6 +29,13 @@ FILES_TO_PUSH = [
     ("backend/requirements.txt",  os.path.join(ROOT, "backend", "requirements.txt")),
     ("backend/api_server.py",     os.path.join(ROOT, "backend", "api_server.py")),
     ("render.yaml",               os.path.join(ROOT, "render.yaml")),
+    ("vercel.json",               os.path.join(ROOT, "vercel.json")),
+    (".vercelignore",             os.path.join(ROOT, ".vercelignore")),
+    ("viewEBPass.html",           os.path.join(ROOT, "viewEBPass.html")),
+    ("viewEPass.html",            os.path.join(ROOT, "viewEPass.html")),
+    ("registeredUsers.html",      os.path.join(ROOT, "registeredUsers.html")),
+    ("getEPass.jsp.html",         os.path.join(ROOT, "getEPass.jsp.html")),
+    ("apply.html",                os.path.join(ROOT, "apply.html")),
 ]
 
 def api_request(method, url, data=None, token=None):
@@ -95,7 +102,7 @@ if __name__ == "__main__":
         input("\nPress Enter to exit...")
         exit(1)
 
-    commit_msg = "fix: crash-proof startup and correct host binding for Render"
+    commit_msg = "fix: deploy static frontend to Vercel and connect with Render backend API"
     success_count = 0
 
     for repo_path, local_path in FILES_TO_PUSH:
@@ -113,4 +120,4 @@ if __name__ == "__main__":
     else:
         print(f"  Done: {success_count}/{len(FILES_TO_PUSH)} files uploaded.")
     print("=" * 55)
-    input("\nPress Enter to exit...")
+
