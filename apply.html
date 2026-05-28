@@ -432,7 +432,11 @@ function validate(){
 					  const formData = new FormData(this);
 
 					  try {
-						  const response = await fetch('https://dtcpass-backend-api.onrender.com/api/passes/apply', {
+						  let apiHost = 'https://dtcpass-backend-api.onrender.com';
+						  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+							  apiHost = 'http://localhost:5000';
+						  }
+						  const response = await fetch(apiHost + '/api/passes/apply', {
 							  method: 'POST',
 							  body: formData
 						  });
@@ -474,12 +478,13 @@ function validate(){
       <br>
       </main>
       <!-- Corporate footer-->
-      <footer class="section-50 page-footer bg-catskill" style="background-color:#01a2a6;">
+      <footer class="section-50 page-footer bg-catskill" style="background-color:#01a2a6; padding: 25px 0;">
         <div class="shell">
-          <div class="range range-xs-center range-sm-middle text-md-left">
-            <div class="cell-xs-10 cell-md-4 text-md-right offset-top-20 offset-md-top-0">
-              <p class="barnd-name text-ubold" style="color:black;"> <b>Copyright &copy;  - Delhi e-Governance Society</b>&nbsp;<span id="copyright-year"></span></p>
-              <!-- {%FOOTER_LINK}-->
+          <div class="range range-xs-center">
+            <div class="cell-xs-12 text-center">
+              <p style="color:black; font-size:12px; font-weight:900; font-family: 'Montserrat', 'Helvetica Neue', Arial, sans-serif; letter-spacing: 0.5px; margin:0; text-transform: none;">
+                Copyright &copy;- Delhi e-Governance Society
+              </p>
             </div>
           </div>
         </div>

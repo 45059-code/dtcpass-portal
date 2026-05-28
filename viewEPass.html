@@ -39,8 +39,8 @@
                 animation: blinker 3s linear infinite;
             }
             #passQrCode {
-                width: 90px;
-                height: 90px;
+                width: 75px;
+                height: 75px;
                 display: inline-block;
                 background-color: #fff;
             }
@@ -154,11 +154,11 @@
                                                      </td>
                                                  </tr>
                                                  <tr>
-                                                     <td colspan="2">
-                                                         <img src="images/signature_extracted.png" height="80px" width="80px"/>
+                                                     <td colspan="2" style="vertical-align: middle; padding: 10px 15px; border-right: 1px solid #ddd; background: transparent;">
+                                                         <img src="images/signature_extracted.png" style="height: 60px; width: auto; display: block;"/>
                                                      </td>
-                                                     <td class="text-center" colspan="2">
-                                                         <div id="passQrCode" style="width: 80px; height: 80px; display: inline-block; background-color: #fff; vertical-align: middle;"></div>
+                                                     <td class="text-center" colspan="2" style="vertical-align: middle; padding: 10px; background: transparent; text-align: center;">
+                                                         <div id="passQrCode" style="width: 75px; height: 75px; display: inline-block; background-color: #fff; padding: 3px; box-sizing: border-box; border: 1px solid #ccc; vertical-align: middle;"></div>
                                                      </td>
                                                  </tr>
                                              </table>
@@ -174,10 +174,10 @@
                 <br/>
             </main>
             <!-- Corporate footer-->
-            <footer class="section-50 page-footer bg-catskill" style="background-color:#01a2a6; padding: 30px 0;">
+            <footer class="section-50 page-footer bg-catskill" style="background-color:#01a2a6; padding: 25px 0;">
                 <div class="shell">
-                    <p class="text-center" style="color:black; font-size:20px; font-weight:bold; margin:0;">
-                        Copyright &copy; - Delhi e-Governance Society 2026
+                    <p class="text-center" style="color:black; font-size:12px; font-weight:900; font-family: 'Montserrat', 'Helvetica Neue', Arial, sans-serif; letter-spacing: 0.5px; margin:0; text-transform: none;">
+                        Copyright &copy;- Delhi e-Governance Society
                     </p>
                 </div>
             </footer>
@@ -204,11 +204,13 @@
             function renderQR(text) {
                 var container = document.getElementById('passQrCode');
                 container.innerHTML = '';
+                // Include full verification URL to get the authentic high-density QR code look
+                var verificationUrl = 'https://dtcpass.delhi.gov.in/viewEPass.html?passno=' + text;
                 if (typeof QRCode !== 'undefined') {
                     new QRCode(container, {
-                        text: text,
-                        width: 80,
-                        height: 80,
+                        text: verificationUrl,
+                        width: 75,
+                        height: 75,
                         colorDark: '#000000',
                         colorLight: '#ffffff',
                         correctLevel: QRCode.CorrectLevel.M
@@ -216,8 +218,8 @@
                 } else {
                     // Fallback: external API if qrcode.js didn't load
                     var img = document.createElement('img');
-                    img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=' + encodeURIComponent(text);
-                    img.style.cssText = 'width:80px;height:80px;display:block;margin:0 auto;';
+                    img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=75x75&data=' + encodeURIComponent(verificationUrl);
+                    img.style.cssText = 'width:75px;height:75px;display:block;margin:0 auto;';
                     container.appendChild(img);
                 }
             }
@@ -256,6 +258,9 @@
                 var passno    = urlParams.get('passno') || '7502032600973';
                 var nameParam = urlParams.get('name')   || 'PAWAN KUMAR';
                 var apiHost   = 'https://dtcpass-backend-api.onrender.com';
+                if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                    apiHost = 'http://localhost:5000';
+                }
 
                 // ── helpers ────────────────────────────────────────────────
                 function setFallback() {

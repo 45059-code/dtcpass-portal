@@ -277,6 +277,9 @@
     <script>
         var passes = [];
         var apiHost = 'https://dtcpass-backend-api.onrender.com';
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            apiHost = 'http://localhost:5000';
+        }
 
         window.onload = () => {
             fetchPasses();

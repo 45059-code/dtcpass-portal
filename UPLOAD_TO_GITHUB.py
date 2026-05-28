@@ -17,7 +17,7 @@ import os
 
 # ─────────────────────────────────────────────
 # FILL IN YOUR DETAILS HERE
-GITHUB_TOKEN = "YOUR_GITHUB_TOKEN_HERE"   # Paste your token
+GITHUB_TOKEN = "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"   # Paste your token
 REPO_OWNER   = "45059-code"               # Your GitHub username
 REPO_NAME    = "dtcpass-portal"           # Your repo name
 BRANCH       = "main"
@@ -102,7 +102,7 @@ if __name__ == "__main__":
         input("\nPress Enter to exit...")
         exit(1)
 
-    commit_msg = "fix: deploy static frontend to Vercel and connect with Render backend API"
+    commit_msg = "fix: qr code size and density, footer typography, and dynamic routing to local API backend"
     success_count = 0
 
     for repo_path, local_path in FILES_TO_PUSH:

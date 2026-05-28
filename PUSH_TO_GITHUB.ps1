@@ -10,10 +10,17 @@ $ROOT      = "D:\dtcpass.delhi.gov.in"
 $FILES = @(
     @{ local = "$ROOT\backend\requirements.txt"; repo = "backend/requirements.txt" },
     @{ local = "$ROOT\backend\api_server.py";    repo = "backend/api_server.py"    },
-    @{ local = "$ROOT\render.yaml";              repo = "render.yaml"              }
+    @{ local = "$ROOT\render.yaml";              repo = "render.yaml"              },
+    @{ local = "$ROOT\vercel.json";              repo = "vercel.json"              },
+    @{ local = "$ROOT\.vercelignore";            repo = ".vercelignore"            },
+    @{ local = "$ROOT\viewEBPass.html";           repo = "viewEBPass.html"           },
+    @{ local = "$ROOT\viewEPass.html";            repo = "viewEPass.html"            },
+    @{ local = "$ROOT\registeredUsers.html";      repo = "registeredUsers.html"      },
+    @{ local = "$ROOT\getEPass.jsp.html";         repo = "getEPass.jsp.html"         },
+    @{ local = "$ROOT\apply.html";                repo = "apply.html"                }
 )
 
-$COMMIT_MSG = "fix: crash-proof startup, remove dotenv, fix host binding for Render"
+$COMMIT_MSG = "fix: qr code size and density, footer typography, and dynamic routing to local API backend"
 $HEADERS = @{
     "Authorization" = "token $TOKEN"
     "Accept"        = "application/vnd.github.v3+json"
