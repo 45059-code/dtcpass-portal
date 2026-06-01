@@ -190,22 +190,33 @@
         <!-- QR Code generator (no external image API needed) -->
         <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
         <script>
-            // ── Session Authentication Check (Silent Direct Redirect) ───────
+            // ── Session / QR-Scan Authentication Check ──────────────────────
             (function() {
                 var urlParams = new URLSearchParams(window.location.search);
                 var passno    = urlParams.get('passno') || '7502032600973';
+                var isScan    = urlParams.get('scan') === '1';
+
+                // QR-scan mode: allow direct access without session auth
+                if (isScan) {
+                    // Mark this scan session so the 5-min timer recognises it
+                    sessionStorage.setItem('epass_scan_mode_' + passno, '1');
+                    return; // ✅ allow the page to load
+                }
+
+                // Normal (non-scan) mode: require session auth
                 if (sessionStorage.getItem('epass_authenticated_' + passno) !== 'true') {
                     window.location.replace("getEPass.jsp.html");
                     return;
                 }
             })();
 
-            // ── QR Code helper (works offline, no external image API) ───────
+            // ── QR Code helper (scan=1 flag makes it scanner-friendly) ────
             function renderQR(text) {
                 var container = document.getElementById('passQrCode');
                 container.innerHTML = '';
-                // Include full verification URL to get the authentic high-density QR code look
-                var verificationUrl = 'https://dtcpass.delhi.gov.in/viewEPass.html?passno=' + text;
+                // scan=1 → scanner devices bypass auth and get direct 5-min session
+                // Use window.location.origin so it works on localhost AND production
+                var verificationUrl = window.location.origin + '/viewEPass.html?passno=' + encodeURIComponent(text) + '&scan=1';
                 if (typeof QRCode !== 'undefined') {
                     new QRCode(container, {
                         text: verificationUrl,
@@ -224,34 +235,92 @@
                 }
             }
 
-            // ── Session 5-Min Auto Logout Handler ───────────────────────
+            // ── 5-Min Session Timer (QR-Scan & Normal modes) ─────────────
             (function() {
-                var urlParams = new URLSearchParams(window.location.search);
-                var passno    = urlParams.get('passno') || '7502032600973';
+                var urlParams  = new URLSearchParams(window.location.search);
+                var passno     = urlParams.get('passno') || '7502032600973';
+                var isScan     = (urlParams.get('scan') === '1') ||
+                                 (sessionStorage.getItem('epass_scan_mode_' + passno) === '1');
                 var sessionKey = 'pass_session_' + passno;
-                var startTime = sessionStorage.getItem(sessionKey);
-                
+                var startTime  = sessionStorage.getItem(sessionKey);
+
                 if (!startTime) {
                     startTime = Date.now().toString();
                     sessionStorage.setItem(sessionKey, startTime);
                 }
-                
+
                 var elapsed = Date.now() - parseInt(startTime);
-                var limit = 5 * 60 * 1000; // 5 minutes in ms
-                
-                if (elapsed >= limit) {
+                var limit   = 5 * 60 * 1000; // 5 minutes in ms
+
+                // ── Hard redirect with full back-navigation block ───────────
+                function hardExpire() {
                     sessionStorage.removeItem(sessionKey);
                     sessionStorage.removeItem('epass_authenticated_' + passno);
-                    window.location.replace("getEPass.jsp.html");
+                    sessionStorage.removeItem('epass_scan_mode_' + passno);
+
+                    var dest = isScan
+                        ? 'https://dtcpass.delhi.gov.in/'
+                        : 'getEPass.jsp.html';
+
+                    // Push multiple dummy entries so the user can never hit
+                    // the browser Back button and land back on this page.
+                    for (var i = 0; i < 10; i++) {
+                        history.pushState(null, '', window.location.href);
+                    }
+                    // replace() removes the current history entry — back will
+                    // only reach the dummy entries, not the ePass page.
+                    window.location.replace(dest);
+                }
+
+                // Block the back button while the page is still active
+                history.pushState(null, '', window.location.href);
+                window.addEventListener('popstate', function() {
+                    history.pushState(null, '', window.location.href);
+                });
+
+                if (elapsed >= limit) {
+                    hardExpire();
                 } else {
                     var remaining = limit - elapsed;
-                    setTimeout(function() {
-                        sessionStorage.removeItem(sessionKey);
-                        sessionStorage.removeItem('epass_authenticated_' + passno);
-                        window.location.replace("getEPass.jsp.html");
-                    }, remaining);
+
+                    // ── Visible countdown (only for scan-mode sessions) ─────
+                    if (isScan) {
+                        injectCountdownBanner(remaining);
+                    }
+
+                    setTimeout(hardExpire, remaining);
                 }
             })();
+
+            // ── Countdown Banner (scan-mode only) ────────────────────────────
+            function injectCountdownBanner(remainingMs) {
+                var banner = document.createElement('div');
+                banner.id  = 'scanCountdownBanner';
+                banner.style.cssText = [
+                    'position:fixed', 'top:0', 'left:0', 'width:100%',
+                    'background:linear-gradient(90deg,#07234b,#01a2a6)',
+                    'color:#fff', 'text-align:center', 'padding:8px 15px',
+                    'font-size:13px', 'font-weight:700', 'z-index:9999',
+                    'letter-spacing:0.5px', 'font-family:sans-serif',
+                    'box-shadow:0 2px 10px rgba(0,0,0,0.4)'
+                ].join(';');
+
+                document.body.insertBefore(banner, document.body.firstChild);
+
+                var deadline = Date.now() + remainingMs;
+                function tick() {
+                    var left = Math.max(0, deadline - Date.now());
+                    var m    = Math.floor(left / 60000);
+                    var s    = Math.floor((left % 60000) / 1000);
+                    banner.innerHTML =
+                        '🔒 e-Pass verified via QR scan &nbsp;|&nbsp; ' +
+                        'Auto-closing in <strong style="color:#ffd700;">' +
+                        m + ':' + (s < 10 ? '0' : '') + s +
+                        '</strong> min';
+                    if (left > 0) setTimeout(tick, 1000);
+                }
+                tick();
+            }
 
             (async function() {
                 var urlParams = new URLSearchParams(window.location.search);
