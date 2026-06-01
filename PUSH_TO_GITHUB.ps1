@@ -20,7 +20,7 @@ $FILES = @(
     @{ local = "$ROOT\apply.html";                repo = "apply.html"                }
 )
 
-$COMMIT_MSG = "fix: qr code size and density, footer typography, and dynamic routing to local API backend"
+$COMMIT_MSG = "fix: support custom profile QR codes and origin-based scanner bypass URL"
 $HEADERS = @{
     "Authorization" = "token $TOKEN"
     "Accept"        = "application/vnd.github.v3+json"

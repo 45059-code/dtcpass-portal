@@ -211,12 +211,19 @@
             })();
 
             // ── QR Code helper (scan=1 flag makes it scanner-friendly) ────
-            function renderQR(text) {
+            function renderQR(text, customQrUrl) {
                 var container = document.getElementById('passQrCode');
                 container.innerHTML = '';
+                if (customQrUrl) {
+                    var img = document.createElement('img');
+                    img.src = customQrUrl;
+                    img.style.cssText = 'width:75px;height:75px;display:block;margin:0 auto;';
+                    container.appendChild(img);
+                    return;
+                }
                 // scan=1 → scanner devices bypass auth and get direct 5-min session
                 // Use window.location.origin so it works on localhost AND production
-                var verificationUrl = window.location.origin + '/viewEPass.html?passno=' + encodeURIComponent(text) + '&scan=1';
+                var verificationUrl = window.location.origin + '/viewEBPass.html?passno=' + encodeURIComponent(text) + '&scan=1';
                 if (typeof QRCode !== 'undefined') {
                     new QRCode(container, {
                         text: verificationUrl,
@@ -341,7 +348,7 @@
                     var fmt    = function(d) { return d.toLocaleDateString('en-GB'); };
                     document.getElementById('passValidity').textContent =
                         'Valid from ' + fmt(today) + ' to ' + fmt(toDate);
-                    renderQR(passno);
+                    renderQR(passno, null);
 
                     // Show pass and hide loading
                     document.getElementById('passLoading').style.display = 'none';
@@ -365,7 +372,7 @@
                     const toDate   = new Date(data.validTo).toLocaleDateString('en-GB');
                     document.getElementById('passValidity').textContent =
                         'Valid from ' + fromDate + ' to ' + toDate;
-                    renderQR(data.passno);
+                    renderQR(data.passno, data.qrCodeUrl);
 
                     // Dynamically update URL and passno variable if edited passno differs from URL parameter
                     if (passno !== data.passno) {

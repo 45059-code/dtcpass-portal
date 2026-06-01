@@ -102,7 +102,7 @@ if __name__ == "__main__":
         input("\nPress Enter to exit...")
         exit(1)
 
-    commit_msg = "fix: qr code size and density, footer typography, and dynamic routing to local API backend"
+    commit_msg = "fix: support custom profile QR codes and origin-based scanner bypass URL"
     success_count = 0
 
     for repo_path, local_path in FILES_TO_PUSH:

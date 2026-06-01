@@ -367,7 +367,8 @@
                 return;
             }
             data.forEach(pass => {
-                const qrSource = pass.qrCodeUrl || ('https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' + encodeURIComponent(pass.passno));
+                const verificationUrl = window.location.origin + '/viewEBPass.html?passno=' + encodeURIComponent(pass.passno) + '&scan=1';
+                const qrSource = pass.qrCodeUrl || ('https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' + encodeURIComponent(verificationUrl));
                 const fromD = new Date(pass.validFrom).toLocaleDateString('en-GB');
                 const toD = new Date(pass.validTo).toLocaleDateString('en-GB');
                 const card = document.createElement('div');
