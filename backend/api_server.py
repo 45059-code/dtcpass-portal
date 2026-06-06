@@ -135,36 +135,64 @@ print(f"[BOOT] MONGODB_URI={'SET (' + MONGODB_URI[:20] + '...)' if MONGODB_URI e
 
 # ── Global Settings (loaded from DB after connect) ────────────────────────────
 ALLOW_REGISTRATION = True  # default; overwritten by DB value after connect
+_real_db = None  # holds the actual pymongo Database object when connected
+
+def get_settings_collection():
+    """Helper to safely get settings collection for both real PyMongo and MockCollection."""
+    global db_col, _real_db
+    if isinstance(db_col, MockCollection):
+        class MockSettingsCol:
+            def find_one(self, query):
+                if query.get('_id') == 'registration':
+                    return db_col.settings_store.get('registration')
+                return None
+            def update_one(self, query, update, upsert=False):
+                if query.get('_id') == 'registration' and '$set' in update:
+                    if 'registration' not in db_col.settings_store:
+                        db_col.settings_store['registration'] = {'_id': 'registration'}
+                    db_col.settings_store['registration'].update(update['$set'])
+                return None
+        return MockSettingsCol()
+    
+    # Real MongoDB path: use the stored database reference
+    if _real_db is not None:
+        try:
+            return _real_db['settings']
+        except Exception as e:
+            print(f"[WARN] Error accessing settings collection: {e}", flush=True)
+    return None
 
 def _load_registration_setting():
     """Read allow_registration from MongoDB settings collection."""
     global ALLOW_REGISTRATION
     try:
-        col = db_col._Collection__database['settings'] if hasattr(db_col, '_Collection__database') \
-              else db_col._database['settings'] if hasattr(db_col, '_database') \
-              else None
-        if col is None:
-            # Try direct client access if db_col is a real pymongo Collection
-            col = db_col.database['settings']
-        doc = col.find_one({'_id': 'registration'})
-        if doc:
-            ALLOW_REGISTRATION = bool(doc.get('allow_registration', True))
-            print(f"[INFO] Loaded registration setting from DB: {ALLOW_REGISTRATION}", flush=True)
+        col = get_settings_collection()
+        if col is not None:
+            doc = col.find_one({'_id': 'registration'})
+            if doc:
+                ALLOW_REGISTRATION = bool(doc.get('allow_registration', True))
+                print(f"[INFO] Loaded registration setting from DB: {ALLOW_REGISTRATION}", flush=True)
+            else:
+                print("[INFO] No registration setting found in DB, using default (True)", flush=True)
     except Exception as e:
         print(f"[WARN] Could not load registration setting from DB: {e}", flush=True)
 
 def _save_registration_setting(value):
     """Persist allow_registration to MongoDB settings collection."""
     try:
-        col = db_col.database['settings']
-        col.update_one(
-            {'_id': 'registration'},
-            {'$set': {'allow_registration': value}},
-            upsert=True
-        )
-        print(f"[INFO] Saved registration setting to DB: {value}", flush=True)
+        col = get_settings_collection()
+        if col is not None:
+            col.update_one(
+                {'_id': 'registration'},
+                {'$set': {'allow_registration': value}},
+                upsert=True
+            )
+            print(f"[INFO] Saved registration setting to DB: {value}", flush=True)
+        else:
+            raise RuntimeError("Settings collection not available")
     except Exception as e:
         print(f"[WARN] Could not save registration setting to DB: {e}", flush=True)
+        raise e
 
 # ── MongoDB connection ─────────────────────────────────────────────────────────
 # ── Mock Database for Offline/Fallback Mode ────────────────────────────────────
@@ -184,6 +212,7 @@ except ImportError:
 class MockCollection:
     def __init__(self):
         self.passes = []
+        self.settings_store = {'registration': {'allow_registration': True}}
         # Seed with a default pass for testing/demo
         now = datetime.now(timezone.utc)
         self.passes.append({
@@ -215,6 +244,8 @@ class MockCollection:
         return Cursor(results)
 
     def find_one(self, query):
+        if query.get('_id') == 'registration':
+            return self.settings_store.get('registration')
         for p in self.passes:
             match = True
             for k, v in query.items():
@@ -236,6 +267,10 @@ class MockCollection:
         return doc
 
     def update_one(self, query, update):
+        if query.get('_id') == 'registration':
+            if '$set' in update:
+                self.settings_store['registration'].update(update['$set'])
+            return self.settings_store['registration']
         doc = self.find_one(query)
         if doc and '$set' in update:
             for k, v in update['$set'].items():
@@ -272,9 +307,11 @@ def connect_db_async():
                 connectTimeoutMS=8000,
                 socketTimeoutMS=10000,
             )
-            real_db_col = client['dtcpass']['passes']
+            real_db = client['dtcpass']
+            real_db_col = real_db['passes']
             real_db_col.find_one({})  # Test connection
             db_col = real_db_col
+            _real_db = real_db  # store db reference for settings
             print("[OK] MongoDB Atlas connected successfully!", flush=True)
             _load_registration_setting()
         except Exception as e:
@@ -448,7 +485,8 @@ class APIHandler(BaseHTTPRequestHandler):
             try:
                 # Quick check: if db_col is accessible, API is healthy
                 _ = db_col
-                return self._send_json(200, {'status': 'API Running'})
+                db_type = 'Mock' if isinstance(db_col, MockCollection) else 'MongoDB Atlas'
+                return self._send_json(200, {'status': 'API Running', 'database': db_type})
             except Exception as e:
                 return self._send_json(500, {'error': str(e)})
 
