@@ -20,49 +20,75 @@
 	<link rel="stylesheet" href="calender/bootstrap-datepicker3.css">
 
   <script>
-        function refreshCaptcha() {
-            var captchaImage = document.getElementById('captchaImage');
-            captchaImage.src = 'captchaServlet?' + new Date().getTime();
-        }
-        </script>
-     <script language="JavaScript">
-    function validateCaptcha() {
-        var userInput = document.getElementById("typeCaptcha").value;
-        
-        if (userInput.length === 0) {
-            alert('Please fill captcha.');
-            return false; // Prevent form submission
-        }
+  var API_HOST = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+                  ? 'http://localhost:5000'
+                  : 'https://dtcpass-backend-api.onrender.com';
 
-        var xmlhttp;
-        if (window.XMLHttpRequest) {
-            xmlhttp = new XMLHttpRequest();
-        } else {
-            xmlhttp = new ActiveXObject("Microsoft.XMLHTTP");
-        }
+  var _captchaToken = '';  // stores current token from server
 
-        xmlhttp.open("POST", "validateCaptchaServlet?typeCaptcha=" + userInput, true);
-        
-        xmlhttp.onreadystatechange = function() {
-            if (xmlhttp.readyState === 4 && xmlhttp.status === 200) {
-                var resp = xmlhttp.responseText.trim();
-                if (resp === "s") {
-                	refreshCaptcha();
-                	typeCaptcha.value = ''; 
-                    document.getElementById("formSubmission").submit(); // Proceed with form submission
-                } else {
-                    alert("Captcha validation failed. Please try again.");
-                    refreshCaptcha();
-                    typeCaptcha.value = ''; 
-                    // Optionally, you can reset the CAPTCHA input field here
-                }
-            }
-        };
+  // Load a fresh captcha image from backend
+  function refreshCaptcha() {
+    var img = document.getElementById('captchaImage');
+    var inp = document.getElementById('typeCaptcha');
+    if (inp) inp.value = '';
+    if (img) img.style.opacity = '0.4';
 
-        xmlhttp.send(null);
+    fetch(API_HOST + '/api/captcha', { cache: 'no-store' })
+      .then(function(res) {
+        _captchaToken = res.headers.get('X-Captcha-Token') || '';
+        return res.blob();
+      })
+      .then(function(blob) {
+        var url = URL.createObjectURL(blob);
+        img.src = url;
+        img.style.opacity = '1';
+      })
+      .catch(function() {
+        if (img) img.style.opacity = '1';
+      });
+  }
 
-        return false; // Prevent immediate form submission before validation completes
+  // Verify captcha with server, then submit form
+  function validateCaptcha() {
+    var userInput = document.getElementById('typeCaptcha').value.trim();
+    if (!userInput) {
+      alert('Please fill captcha.');
+      return false;
     }
+    if (!_captchaToken) {
+      alert('Captcha not loaded. Please click refresh.');
+      refreshCaptcha();
+      return false;
+    }
+
+    fetch(API_HOST + '/api/captcha/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: _captchaToken, answer: userInput })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.valid) {
+        // Captcha passed — trigger the real form submit handler
+        _captchaVerified = true;
+        document.getElementById('formSubmission').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      } else {
+        alert(data.error || 'Wrong captcha. Please try again.');
+        refreshCaptcha();
+      }
+    })
+    .catch(function() {
+      alert('Captcha verification failed. Please try again.');
+      refreshCaptcha();
+    });
+
+    return false;
+  }
+
+  var _captchaVerified = false;
+
+  // Load captcha on page ready
+  document.addEventListener('DOMContentLoaded', function() { refreshCaptcha(); });
 </script>
 
 <script>
@@ -421,9 +447,13 @@ function validate(){
 
 				  <script>
 				  document.getElementById('formSubmission').addEventListener('submit', async function(e) {
-					  e.preventDefault();
-					  
-					  if (!validate()) return false;
+				  e.preventDefault();
+
+				  // If captcha not yet verified, stop (validateCaptcha will re-trigger submit)
+				  if (!_captchaVerified) return false;
+				  _captchaVerified = false; // reset for next use
+
+				  if (!validate()) return false;
 
 					  const submitBtn = this.querySelector('button[type="submit"]');
 					  submitBtn.innerText = "Processing...";
