@@ -6,6 +6,7 @@ const cors = require('cors');
 const multer = require('multer');
 const axios = require('axios');
 const FormData = require('form-data');
+const cron = require('node-cron');
 
 const app = express();
 app.use(cors());
@@ -14,6 +15,25 @@ app.use(express.json());
 // Set up Multer memory storage
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
+
+// ── Root Route — fixes the {"error":"Not found"} on browser open ──────────────
+app.get('/', (req, res) => {
+  res.json({
+    service:  'DTC e-Bus Pass — Backend API',
+    status:   'Running ✅',
+    version:  '1.0.0',
+    time:     new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
+    endpoints: {
+      health:       'GET  /api/health',
+      allPasses:    'GET  /api/passes',
+      getPass:      'GET  /api/passes/:passno',
+      checkPass:    'GET  /api/passes/check?mobile=&dob=',
+      applyPass:    'POST /api/passes/apply',
+      updatePass:   'PUT  /api/passes/:id',
+      deletePass:   'DELETE /api/passes/:id'
+    }
+  });
+});
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI)
@@ -85,10 +105,11 @@ app.post('/api/passes/apply', upload.single('photo'), async (req, res) => {
     await newPass.save();
     console.log(`Saved pass ${passno} to MongoDB.`);
 
+    const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:8000';
     res.status(201).json({
       success: true,
       passno,
-      redirectUrl: `http://localhost:8000/viewEBPass.html?passno=${passno}`
+      redirectUrl: `${FRONTEND_URL}/viewEBPass.html?passno=${passno}`
     });
 
   } catch (error) {
@@ -210,6 +231,50 @@ app.delete('/api/passes/:id', async (req, res) => {
   }
 });
 
+// ── Health Check Endpoint ─────────────────────────────────────────────────────
+// Used by cron-job.org (external) to ping and keep Render awake on free tier
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'OK',
+    time: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
+    service: 'DTC e-Bus Pass Backend'
+  });
+});
+
+// ── Cron Job (runs inside Render server process) ───────────────────────────────
+// Schedule : Every 10 minutes, ONLY 5:00 AM – 8:50 PM IST
+// Cron expr: */10 5-20 * * *
+//
+//  ┌─────── minute  (*/10 = every 10 min)
+//  │   ┌─── hour    (5-20  = 5 AM to 8 PM, last tick at 20:50)
+//  │   │   ┌ day  ┌ month  ┌ weekday
+// */10 5-20 *     *        *
+
+cron.schedule('*/10 5-20 * * *', async () => {
+  const now = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+  console.log(`[CRON] ⏰ Tick at ${now}`);
+
+  try {
+    // ── Task 1: Self health-check ────────────────────────────────────────
+    const SELF_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${process.env.PORT || 5000}`;
+    const res = await axios.get(`${SELF_URL}/api/health`, { timeout: 8000 });
+    console.log(`[CRON] ✅ Health OK → ${res.data.status}`);
+
+    // ── Add more tasks here ──────────────────────────────────────────────
+    // await expireOldPasses();
+    // await sendReminders();
+
+  } catch (err) {
+    console.error(`[CRON] ❌ Task failed: ${err.message}`);
+  }
+}, {
+  scheduled: true,
+  timezone: 'Asia/Kolkata'   // IST — Render uses UTC internally, this corrects it
+});
+
+console.log('[CRON] 🚀 Scheduled: every 10 min, 5 AM–9 PM IST (*/10 5-20 * * * Asia/Kolkata)');
+
+// ── Start Server ──────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Backend server running at http://localhost:${PORT}`);
