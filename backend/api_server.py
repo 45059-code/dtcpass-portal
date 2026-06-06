@@ -275,18 +275,8 @@ def connect_db_async():
             real_db_col = client['dtcpass']['passes']
             real_db_col.find_one({})  # Test connection
             db_col = real_db_col
-    print("[OK] MongoDB Atlas connected successfully!", flush=True)
-    # Load persisted settings after DB connect
-    try:
-        settings_col = real_db_col.database['settings']
-        doc = settings_col.find_one({'_id': 'registration'})
-        if doc is not None:
-            ALLOW_REGISTRATION = bool(doc.get('allow_registration', True))
-            print(f"[INFO] Registration setting loaded from DB: ALLOW_REGISTRATION={ALLOW_REGISTRATION}", flush=True)
-        else:
-            print("[INFO] No registration setting in DB yet, using default: True", flush=True)
-    except Exception as se:
-        print(f"[WARN] Could not load settings from DB: {se}", flush=True)
+            print("[OK] MongoDB Atlas connected successfully!", flush=True)
+            _load_registration_setting()
         except Exception as e:
             print(f"[WARN] MongoDB connection failed: {e}", flush=True)
             print("[INFO] Falling back to in-memory mock database.", flush=True)
