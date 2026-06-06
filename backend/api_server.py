@@ -342,6 +342,35 @@ class APIHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         path, qs = self._path_and_query()
 
+        # GET / — Root route (fixes "Not found" error on browser open)
+        if path == '' or path == '/':
+            now_ist = datetime.now(timezone.utc).strftime('%d/%m/%Y, %I:%M:%S %p')
+            return self._send_json(200, {
+                'service':  'DTC e-Bus Pass — Backend API',
+                'status':   'Running OK',
+                'version':  '1.0.0',
+                'time_utc': now_ist,
+                'endpoints': {
+                    'health':     'GET  /api/health',
+                    'allPasses':  'GET  /api/passes',
+                    'getPass':    'GET  /api/passes/<passno>',
+                    'checkPass':  'GET  /api/passes/check?mobile=&dob=',
+                    'applyPass':  'POST /api/passes/apply',
+                    'updatePass': 'PUT  /api/passes/<id>',
+                    'deletePass': 'DELETE /api/passes/<id>',
+                    'settings':   'GET/POST /api/settings'
+                }
+            })
+
+        # GET /api/health — Used by cron-job.org to keep Render awake
+        if path == '/api/health':
+            now_ist = datetime.now(timezone.utc).strftime('%d/%m/%Y, %I:%M:%S %p')
+            return self._send_json(200, {
+                'status':  'OK',
+                'time':    now_ist,
+                'service': 'DTC e-Bus Pass Backend'
+            })
+
         # GET /api/settings - retrieve global registration settings
         if path == '/api/settings':
             return self._send_json(200, {'allow_registration': ALLOW_REGISTRATION})
