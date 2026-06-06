@@ -10,10 +10,80 @@ import random
 import base64
 import io
 import traceback
+import string
+import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from datetime import datetime, timedelta, timezone
 import socket
+
+# ── Captcha store (in-memory, token → {text, expires}) ────────────────────────
+_CAPTCHA_STORE = {}
+CAPTCHA_TTL = 300  # seconds (5 minutes)
+
+def _captcha_cleanup():
+    now = time.time()
+    expired = [k for k, v in _CAPTCHA_STORE.items() if v['expires'] < now]
+    for k in expired:
+        del _CAPTCHA_STORE[k]
+
+def generate_captcha_token():
+    """Create a random 6-char captcha, store it, return (token, text)."""
+    _captcha_cleanup()
+    text  = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+    token = ''.join(random.choices(string.ascii_lowercase + string.digits, k=24))
+    _CAPTCHA_STORE[token] = {'text': text, 'expires': time.time() + CAPTCHA_TTL}
+    return token, text
+
+def verify_captcha_token(token, user_input):
+    """Return True if token exists and input matches (case-insensitive). Deletes token after use."""
+    entry = _CAPTCHA_STORE.get(token)
+    if not entry:
+        return False
+    if time.time() > entry['expires']:
+        del _CAPTCHA_STORE[token]
+        return False
+    ok = entry['text'].upper() == user_input.strip().upper()
+    del _CAPTCHA_STORE[token]  # one-time use
+    return ok
+
+def draw_captcha_image(text):
+    """Draw captcha text as a simple PNG using only stdlib (no Pillow needed)."""
+    # We'll generate an SVG and return it as image/svg+xml
+    width, height = 180, 60
+    chars = list(text)
+    items = []
+    colors = ['#c0392b','#2980b9','#27ae60','#8e44ad','#e67e22','#2c3e50']
+    for i, ch in enumerate(chars):
+        x = 15 + i * 27 + random.randint(-3, 3)
+        y = 38 + random.randint(-5, 5)
+        rot = random.randint(-18, 18)
+        size = random.randint(22, 30)
+        color = colors[i % len(colors)]
+        items.append(
+            f'<text x="{x}" y="{y}" transform="rotate({rot},{x},{y})" '
+            f'font-size="{size}" font-family="monospace" font-weight="bold" '
+            f'fill="{color}">{ch}</text>'
+        )
+    # Noise lines
+    lines = []
+    for _ in range(5):
+        x1,y1 = random.randint(0,width), random.randint(0,height)
+        x2,y2 = random.randint(0,width), random.randint(0,height)
+        c = random.choice(['#bdc3c7','#95a5a6','#7f8c8d'])
+        lines.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{c}" stroke-width="1.5"/>')
+    # Noise dots
+    dots = []
+    for _ in range(30):
+        cx,cy = random.randint(0,width), random.randint(0,height)
+        dots.append(f'<circle cx="{cx}" cy="{cy}" r="1.5" fill="#bdc3c7"/>')
+    svg = (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+        f'style="background:#f8f9fa;border-radius:6px;">'
+        + ''.join(lines) + ''.join(dots) + ''.join(items)
+        + '</svg>'
+    )
+    return svg.encode('utf-8')
 
 print("[BOOT] api_server.py starting...", flush=True)
 print(f"[BOOT] Python {sys.version}", flush=True)
@@ -63,8 +133,38 @@ HOST          = '0.0.0.0'
 print(f"[BOOT] HOST={HOST} PORT={PORT}", flush=True)
 print(f"[BOOT] MONGODB_URI={'SET (' + MONGODB_URI[:20] + '...)' if MONGODB_URI else 'NOT SET (will use mock DB)'}", flush=True)
 
-# ── Global Settings ────────────────────────────────────────────────────────────
-ALLOW_REGISTRATION = True
+# ── Global Settings (loaded from DB after connect) ────────────────────────────
+ALLOW_REGISTRATION = True  # default; overwritten by DB value after connect
+
+def _load_registration_setting():
+    """Read allow_registration from MongoDB settings collection."""
+    global ALLOW_REGISTRATION
+    try:
+        col = db_col._Collection__database['settings'] if hasattr(db_col, '_Collection__database') \
+              else db_col._database['settings'] if hasattr(db_col, '_database') \
+              else None
+        if col is None:
+            # Try direct client access if db_col is a real pymongo Collection
+            col = db_col.database['settings']
+        doc = col.find_one({'_id': 'registration'})
+        if doc:
+            ALLOW_REGISTRATION = bool(doc.get('allow_registration', True))
+            print(f"[INFO] Loaded registration setting from DB: {ALLOW_REGISTRATION}", flush=True)
+    except Exception as e:
+        print(f"[WARN] Could not load registration setting from DB: {e}", flush=True)
+
+def _save_registration_setting(value):
+    """Persist allow_registration to MongoDB settings collection."""
+    try:
+        col = db_col.database['settings']
+        col.update_one(
+            {'_id': 'registration'},
+            {'$set': {'allow_registration': value}},
+            upsert=True
+        )
+        print(f"[INFO] Saved registration setting to DB: {value}", flush=True)
+    except Exception as e:
+        print(f"[WARN] Could not save registration setting to DB: {e}", flush=True)
 
 # ── MongoDB connection ─────────────────────────────────────────────────────────
 # ── Mock Database for Offline/Fallback Mode ────────────────────────────────────
@@ -175,7 +275,18 @@ def connect_db_async():
             real_db_col = client['dtcpass']['passes']
             real_db_col.find_one({})  # Test connection
             db_col = real_db_col
-            print("[OK] MongoDB Atlas connected successfully!", flush=True)
+    print("[OK] MongoDB Atlas connected successfully!", flush=True)
+    # Load persisted settings after DB connect
+    try:
+        settings_col = real_db_col.database['settings']
+        doc = settings_col.find_one({'_id': 'registration'})
+        if doc is not None:
+            ALLOW_REGISTRATION = bool(doc.get('allow_registration', True))
+            print(f"[INFO] Registration setting loaded from DB: ALLOW_REGISTRATION={ALLOW_REGISTRATION}", flush=True)
+        else:
+            print("[INFO] No registration setting in DB yet, using default: True", flush=True)
+    except Exception as se:
+        print(f"[WARN] Could not load settings from DB: {se}", flush=True)
         except Exception as e:
             print(f"[WARN] MongoDB connection failed: {e}", flush=True)
             print("[INFO] Falling back to in-memory mock database.", flush=True)
@@ -397,21 +508,53 @@ class APIHandler(BaseHTTPRequestHandler):
                 return self._send_json(404, {'error': 'Bus Pass not found.'})
             return self._send_json(200, doc_to_dict(doc))
 
+        # GET /api/captcha — Generate a new captcha image (SVG) + token
+        if path == '/api/captcha':
+            token, text = generate_captcha_token()
+            svg_bytes = draw_captcha_image(text)
+            # Send SVG image
+            self.send_response(200)
+            self.send_header('Content-Type', 'image/svg+xml')
+            self.send_header('Content-Length', str(len(svg_bytes)))
+            self.send_header('X-Captcha-Token', token)  # token sent in header
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Access-Control-Expose-Headers', 'X-Captcha-Token')
+            self.send_header('Cache-Control', 'no-store, no-cache')
+            self.end_headers()
+            self.wfile.write(svg_bytes)
+            return
+
         self._send_json(404, {'error': 'Not found'})
 
     # ── POST ─────────────────────────────────────────────────────────────────
     def do_POST(self):
         path, _ = self._path_and_query()
 
-        # POST /api/settings - toggle registration state
+        # POST /api/captcha/verify — Validate captcha token + user input
+        if path == '/api/captcha/verify':
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                data   = json.loads(self.rfile.read(length).decode('utf-8'))
+                token  = data.get('token', '').strip()
+                answer = data.get('answer', '').strip()
+                if not token or not answer:
+                    return self._send_json(400, {'error': 'token and answer required'})
+                if verify_captcha_token(token, answer):
+                    return self._send_json(200, {'valid': True})
+                return self._send_json(200, {'valid': False, 'error': 'Wrong captcha. Please try again.'})
+            except Exception as e:
+                return self._send_json(400, {'error': str(e)})
+
+        # POST /api/settings - toggle registration state (persisted to DB)
         if path == '/api/settings':
             global ALLOW_REGISTRATION
             try:
                 length = int(self.headers.get('Content-Length', 0))
-                body = self.rfile.read(length).decode('utf-8')
-                data = json.loads(body)
+                body   = self.rfile.read(length).decode('utf-8')
+                data   = json.loads(body)
                 ALLOW_REGISTRATION = bool(data.get('allow_registration', True))
-                print(f"[INFO] Registration setting updated: ALLOW_REGISTRATION = {ALLOW_REGISTRATION}")
+                _save_registration_setting(ALLOW_REGISTRATION)  # ← persist to MongoDB
+                print(f"[INFO] Registration setting updated + saved to DB: {ALLOW_REGISTRATION}")
                 return self._send_json(200, {'success': True, 'allow_registration': ALLOW_REGISTRATION})
             except Exception as e:
                 return self._send_json(400, {'error': str(e)})
