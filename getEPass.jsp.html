@@ -32,8 +32,10 @@
 	<link rel="stylesheet" href="calender/bootstrap-datepicker3.css">
 	
 	<script>
-    var API_HOST = 'http://localhost:5000';
-    var LIVE_API_HOST = 'https://dtcpass-backend-api.onrender.com';
+    // Auto-detect API host: use local server if on localhost, else use Render backend
+    var API_HOST = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+        ? 'http://localhost:5000'
+        : 'https://dtcpass-backend-api.onrender.com';
     var _captchaToken = '';
 
     function refreshCaptcha() {
@@ -44,44 +46,33 @@
 
         fetch(API_HOST + '/api/captcha', { cache: 'no-store' })
           .then(function(res) {
-            if (!res.ok) throw new Error("not ok");
+            if (!res.ok) throw new Error('captcha fetch failed');
             _captchaToken = res.headers.get('X-Captcha-Token') || '';
             return res.blob();
           })
           .then(function(blob) {
-            var url = URL.createObjectURL(blob);
-            img.src = url;
-            img.style.opacity = '1';
-          })
-          .catch(function() {
-            API_HOST = LIVE_API_HOST;
-            fetch(API_HOST + '/api/captcha', { cache: 'no-store' })
-              .then(function(res) {
-                _captchaToken = res.headers.get('X-Captcha-Token') || '';
-                return res.blob();
-              })
-              .then(function(blob) {
+            if (img) {
                 var url = URL.createObjectURL(blob);
                 img.src = url;
                 img.style.opacity = '1';
-              })
-              .catch(function(e) {
-                console.error("Failed to load captcha:", e);
-                if (img) img.style.opacity = '1';
-              });
+            }
+          })
+          .catch(function(e) {
+            console.error('Failed to load captcha:', e);
+            if (img) img.style.opacity = '1';
           });
     }
 
     document.addEventListener('DOMContentLoaded', function() { refreshCaptcha(); });
 
     function validateCaptcha() {
-        var userInput = document.getElementById("typeCaptcha").value.trim();
+        var userInput = document.getElementById('typeCaptcha').value.trim();
         if (userInput.length === 0) {
             alert('Please fill captcha.');
             return false;
         }
         if (!_captchaToken) {
-            alert('Captcha not loaded. Please click refresh.');
+            alert('Captcha not loaded. Please click the refresh button.');
             refreshCaptcha();
             return false;
         }
@@ -94,6 +85,8 @@
         .then(function(r) { return r.json(); })
         .then(function(data) {
             if (data.valid) {
+                // Captcha matched — load the pass details
+                refreshCaptcha(); // reset captcha for next use
                 showPassDetail();
             } else {
                 alert(data.error || 'Wrong captcha. Please try again.');
@@ -110,13 +103,13 @@
     }
 
     function validateOTPCaptcha() {
-        var userInput = document.getElementById("typeCaptcha").value.trim();
+        var userInput = document.getElementById('typeCaptcha').value.trim();
         if (userInput.length === 0) {
             alert('Please fill captcha.');
             return false;
         }
         if (!_captchaToken) {
-            alert('Captcha not loaded. Please click refresh.');
+            alert('Captcha not loaded. Please click the refresh button.');
             refreshCaptcha();
             return false;
         }
@@ -129,8 +122,7 @@
         .then(function(r) { return r.json(); })
         .then(function(data) {
             if (data.valid) {
-                alert("Captcha validation successful");
-                document.getElementById("formSubmission").submit();
+                document.getElementById('formSubmission').submit();
             } else {
                 alert(data.error || 'Wrong captcha. Please try again.');
                 document.getElementById('typeCaptcha').value = '';
