@@ -31,52 +31,120 @@
 	<script type="text/javascript" src="calender/bootstrap-datepicker.min.js"></script>
 	<link rel="stylesheet" href="calender/bootstrap-datepicker3.css">
 	
-	 <script>
-        function refreshCaptcha() {
-            var captchaImage = document.getElementById('captchaImage');
-            captchaImage.src = 'captchaServlet?' + new Date().getTime();
+	<script>
+    var API_HOST = 'http://localhost:5000';
+    var LIVE_API_HOST = 'https://dtcpass-backend-api.onrender.com';
+    var _captchaToken = '';
+
+    function refreshCaptcha() {
+        var img = document.getElementById('captchaImage');
+        var inp = document.getElementById('typeCaptcha');
+        if (inp) inp.value = '';
+        if (img) img.style.opacity = '0.4';
+
+        fetch(API_HOST + '/api/captcha', { cache: 'no-store' })
+          .then(function(res) {
+            if (!res.ok) throw new Error("not ok");
+            _captchaToken = res.headers.get('X-Captcha-Token') || '';
+            return res.blob();
+          })
+          .then(function(blob) {
+            var url = URL.createObjectURL(blob);
+            img.src = url;
+            img.style.opacity = '1';
+          })
+          .catch(function() {
+            API_HOST = LIVE_API_HOST;
+            fetch(API_HOST + '/api/captcha', { cache: 'no-store' })
+              .then(function(res) {
+                _captchaToken = res.headers.get('X-Captcha-Token') || '';
+                return res.blob();
+              })
+              .then(function(blob) {
+                var url = URL.createObjectURL(blob);
+                img.src = url;
+                img.style.opacity = '1';
+              })
+              .catch(function(e) {
+                console.error("Failed to load captcha:", e);
+                if (img) img.style.opacity = '1';
+              });
+          });
+    }
+
+    document.addEventListener('DOMContentLoaded', function() { refreshCaptcha(); });
+
+    function validateCaptcha() {
+        var userInput = document.getElementById("typeCaptcha").value.trim();
+        if (userInput.length === 0) {
+            alert('Please fill captcha.');
+            return false;
         }
-        </script>
-     <script language="JavaScript">
-     function validateCaptcha() {
-    	    var userInput = document.getElementById("typeCaptcha").value.trim();
-    	    
-    	    if (userInput.length === 0) {
-    	        alert('Please fill captcha.');
-    	        return false; // Prevent form submission
-    	    }
+        if (!_captchaToken) {
+            alert('Captcha not loaded. Please click refresh.');
+            refreshCaptcha();
+            return false;
+        }
 
-    	    if (userInput.toLowerCase() === "qoqf4y") {
-    	        showPassDetail();
-    	    } else {
-    	        alert("Captcha did not match. Please try again.");
-    	        refreshCaptcha();
-    	        document.getElementById('typeCaptcha').value = '';
-    	    }
+        fetch(API_HOST + '/api/captcha/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: _captchaToken, answer: userInput })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.valid) {
+                showPassDetail();
+            } else {
+                alert(data.error || 'Wrong captcha. Please try again.');
+                document.getElementById('typeCaptcha').value = '';
+                refreshCaptcha();
+            }
+        })
+        .catch(function() {
+            alert('Captcha verification failed. Please try again.');
+            refreshCaptcha();
+        });
 
-    	    return false; // Prevent immediate form submission before validation completes
-    	}
-     function validateOTPCaptcha() {
-    	        var userInput = document.getElementById("typeCaptcha").value.trim();
-    	        
-    	        if (userInput.length === 0) {
-    	            alert('Please fill captcha.');
-    	            return false; // Prevent form submission
-    	        }
+        return false;
+    }
 
-    	        if (userInput.toLowerCase() === "qoqf4y") {
-    	            alert("Captcha validation successful");
-    	            document.getElementById("formSubmission").submit(); // Proceed with form submission
-    	        } else {
-    	            alert("Captcha did not match. Please try again.");
-    	            refreshCaptcha();
-    	            document.getElementById('typeCaptcha').value = '';
-    	        }
+    function validateOTPCaptcha() {
+        var userInput = document.getElementById("typeCaptcha").value.trim();
+        if (userInput.length === 0) {
+            alert('Please fill captcha.');
+            return false;
+        }
+        if (!_captchaToken) {
+            alert('Captcha not loaded. Please click refresh.');
+            refreshCaptcha();
+            return false;
+        }
 
-    	        return false; // Prevent immediate form submission before validation completes
-    	    }
+        fetch(API_HOST + '/api/captcha/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: _captchaToken, answer: userInput })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.valid) {
+                alert("Captcha validation successful");
+                document.getElementById("formSubmission").submit();
+            } else {
+                alert(data.error || 'Wrong captcha. Please try again.');
+                document.getElementById('typeCaptcha').value = '';
+                refreshCaptcha();
+            }
+        })
+        .catch(function() {
+            alert('Captcha verification failed. Please try again.');
+            refreshCaptcha();
+        });
 
-</script>
+        return false;
+    }
+	</script>
 	<script>
 	$(document).ready(function(){
 		var date_input=$('input[name="dob"]'); //our date input has the name "date"
