@@ -218,11 +218,21 @@
                 var urlParams = new URLSearchParams(window.location.search);
                 var passno    = urlParams.get('passno') || '7502032600973';
                 var isScan    = urlParams.get('scan') === '1';
+                var isOffline = urlParams.get('offline') === '1';
 
                 // QR-scan mode: allow direct access without session auth
                 if (isScan) {
-                    // Mark this scan session so the 5-min timer recognises it
                     sessionStorage.setItem('epass_scan_mode_' + passno, '1');
+                    return; // ✅ allow the page to load
+                }
+
+                // Offline mode: allow direct access (backend was unreachable)
+                if (isOffline) {
+                    return; // ✅ allow the page to load
+                }
+
+                // LOOKUP_ passno (offline mobile+dob lookup) — allow
+                if (passno.startsWith('LOOKUP_')) {
                     return; // ✅ allow the page to load
                 }
 
@@ -356,6 +366,9 @@
                 var urlParams = new URLSearchParams(window.location.search);
                 var passno    = urlParams.get('passno') || '7502032600973';
                 var nameParam = urlParams.get('name')   || 'PAWAN KUMAR';
+                var mobileParam = urlParams.get('mobile') || '';
+                var dobParam    = urlParams.get('dob')    || '';
+                var isOffline   = urlParams.get('offline') === '1';
                 var apiHost   = 'https://dtcpass-backend-api.onrender.com';
                 if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
                     apiHost = 'http://localhost:5000';
@@ -363,24 +376,37 @@
 
                 // ── helpers ────────────────────────────────────────────────
                 function setFallback() {
-                    document.getElementById('blink').textContent   = passno;
-                    document.getElementById('passName').textContent = nameParam.toUpperCase();
+                    document.getElementById('blink').textContent   = passno.startsWith('LOOKUP_') ? ('Mobile: ' + mobileParam) : passno;
+                    document.getElementById('passName').textContent = nameParam.toUpperCase() || 'USER';
                     document.getElementById('passPhoto').src        = 'images/pawan.jpg';
                     var today  = new Date();
                     var toDate = new Date(); toDate.setDate(today.getDate() + 150);
                     var fmt    = function(d) { return d.toLocaleDateString('en-GB'); };
-                    document.getElementById('passValidity').textContent =
-                        'Valid from ' + fmt(today) + ' to ' + fmt(toDate);
-                    renderQR(passno, null);
+                    var validityText;
+                    if (dobParam) {
+                        validityText = 'Mobile: ' + mobileParam + ' | DOB: ' + dobParam;
+                    } else {
+                        validityText = 'Valid from ' + fmt(today) + ' to ' + fmt(toDate);
+                    }
+                    document.getElementById('passValidity').textContent = validityText;
+                    if (!passno.startsWith('LOOKUP_')) {
+                        renderQR(passno, null);
+                    }
 
                     // Show pass and hide loading
                     document.getElementById('passLoading').style.display = 'none';
                     document.getElementById('passContainer').style.display = 'block';
                 }
 
+                // Offline mode: show fallback immediately (backend was unreachable)
+                if (isOffline || passno.startsWith('LOOKUP_')) {
+                    setFallback();
+                    return;
+                }
+
                 try {
                     const ctrl     = new AbortController();
-                    const timer    = setTimeout(function() { ctrl.abort(); }, 3000); // 3s timeout
+                    const timer    = setTimeout(function() { ctrl.abort(); }, 5000); // 5s timeout
                     const response = await fetch(apiHost + '/api/passes/' + passno + '?t=' + new Date().getTime(),
                                                  { signal: ctrl.signal });
                     clearTimeout(timer);
