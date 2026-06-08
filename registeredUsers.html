@@ -132,6 +132,23 @@
         @keyframes spin { to { transform: rotate(360deg); } }
         .load-text { color: var(--primary-glow); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
 
+        /* Toast notification */
+        .toast-container {
+            position: fixed; top: 20px; right: 20px; z-index: 9999;
+            display: flex; flex-direction: column; gap: 10px;
+        }
+        .toast {
+            padding: 12px 18px; border-radius: 10px; font-size: 13px; font-weight: 600;
+            max-width: 320px; box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+            display: flex; align-items: center; gap: 10px;
+            animation: slideIn 0.3s ease; transition: opacity 0.4s ease;
+            pointer-events: none;
+        }
+        .toast.success { background: rgba(17, 153, 142, 0.95); border: 1px solid #38ef7d; color: #fff; }
+        .toast.error   { background: rgba(200, 40, 40, 0.95);  border: 1px solid #ff5e57; color: #fff; }
+        .toast.info    { background: rgba(1, 162, 166, 0.9);   border: 1px solid #01a2a6; color: #fff; }
+        @keyframes slideIn { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
         /* Premium Glowing Glassmorphic Switch Styling */
         .switch {
             position: relative;
@@ -274,6 +291,9 @@
         <div class="load-text" id="loadText">Loading Passes...</div>
     </div>
 
+    <!-- Toast container -->
+    <div class="toast-container" id="toastContainer"></div>
+
     <script>
         var passes = [];
         var apiHost = 'https://dtcpass-backend-api.onrender.com';
@@ -281,15 +301,38 @@
             apiHost = 'http://localhost:5000';
         }
 
+        // ── Toast notification system ─────────────────────────────────────────
+        function showToast(message, type, duration) {
+            type = type || 'info';
+            duration = duration || 3500;
+            var container = document.getElementById('toastContainer');
+            var toast = document.createElement('div');
+            var icons = { success: '✅', error: '❌', info: 'ℹ️' };
+            toast.className = 'toast ' + type;
+            toast.innerHTML = '<span>' + (icons[type] || '') + '</span><span>' + message + '</span>';
+            container.appendChild(toast);
+            setTimeout(function() {
+                toast.style.opacity = '0';
+                setTimeout(function() { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 400);
+            }, duration);
+        }
+
+        // ── Track whether we recently sent a toggle (to avoid fetchSettings overriding it) ──
+        var _pendingToggle = false;
+
         window.onload = () => {
             fetchPasses();
             fetchSettings();
         };
 
         function fetchSettings() {
+            // Don't override a toggle that's in flight
+            if (_pendingToggle) return;
             fetch(apiHost + '/api/settings?t=' + new Date().getTime())
             .then(res => res.json())
             .then(data => {
+                // Don't override a toggle that just happened
+                if (_pendingToggle) return;
                 const regToggle = document.getElementById('regToggle');
                 const statusText = document.getElementById('gatewayStatusText');
                 regToggle.checked = data.allow_registration;
@@ -305,32 +348,56 @@
         }
 
         function toggleRegistrationGateway(toggleEl) {
-            const statusText = document.getElementById('gatewayStatusText');
-            statusText.textContent = "Updating...";
-            statusText.style.color = "var(--text-muted)";
-            
+            var newValue = toggleEl.checked;
+            var statusText = document.getElementById('gatewayStatusText');
+
+            // ── Optimistic UI update (instant feedback) ──────────────────────
+            _pendingToggle = true;
+            if (newValue) {
+                statusText.textContent = "ENABLED";
+                statusText.style.color = "#01a2a6";
+            } else {
+                statusText.textContent = "DISABLED";
+                statusText.style.color = "#ff3b30";
+            }
+
             fetch(apiHost + '/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ allow_registration: toggleEl.checked })
+                body: JSON.stringify({ allow_registration: newValue })
             })
             .then(res => {
-                if (!res.ok) throw new Error();
+                if (!res.ok) throw new Error('Server returned ' + res.status);
                 return res.json();
             })
             .then(data => {
+                _pendingToggle = false;
+                // Sync with actual value returned by server
                 toggleEl.checked = data.allow_registration;
                 if (data.allow_registration) {
+                    statusText.textContent = "ENABLED";
+                    statusText.style.color = "#01a2a6";
+                    showToast('Registration gateway ENABLED', 'success');
+                } else {
+                    statusText.textContent = "DISABLED";
+                    statusText.style.color = "#ff3b30";
+                    showToast('Registration gateway DISABLED', 'info');
+                }
+            })
+            .catch(function(err) {
+                // Network error — revert the toggle since we couldn't reach server
+                _pendingToggle = false;
+                console.error('Gateway toggle error:', err);
+                var reverted = !newValue;
+                toggleEl.checked = reverted;
+                if (reverted) {
                     statusText.textContent = "ENABLED";
                     statusText.style.color = "#01a2a6";
                 } else {
                     statusText.textContent = "DISABLED";
                     statusText.style.color = "#ff3b30";
                 }
-            })
-            .catch(() => {
-                alert("Failed to update gateway status. Please check backend connection.");
-                fetchSettings();
+                showToast('Failed to update gateway status — check backend connection.', 'error', 5000);
             });
         }
 
