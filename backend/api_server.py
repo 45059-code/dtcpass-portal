@@ -638,7 +638,7 @@ class APIHandler(BaseHTTPRequestHandler):
                 return self._send_json(201, {
                     'success': True,
                     'passno': passno,
-                    'redirectUrl': f'/viewEPass.html?passno={passno}'
+                    'redirectUrl': f'/viewEBPass.html?passno={passno}'
                 })
             except Exception as e:
                 traceback.print_exc()
