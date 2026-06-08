@@ -48,42 +48,44 @@ def verify_captcha_token(token, user_input):
     return ok
 
 def draw_captcha_image(text):
-    """Draw captcha text as a simple PNG using only stdlib (no Pillow needed)."""
-    # We'll generate an SVG and return it as image/svg+xml
-    width, height = 180, 60
+    """Draw captcha text as SVG and return it as a base64 data URI string."""
+    width, height = 200, 65
     chars = list(text)
     items = []
     colors = ['#c0392b','#2980b9','#27ae60','#8e44ad','#e67e22','#2c3e50']
     for i, ch in enumerate(chars):
-        x = 15 + i * 27 + random.randint(-3, 3)
-        y = 38 + random.randint(-5, 5)
-        rot = random.randint(-18, 18)
-        size = random.randint(22, 30)
+        x = 18 + i * 29 + random.randint(-3, 3)
+        y = 42 + random.randint(-6, 6)
+        rot = random.randint(-15, 15)
+        size = random.randint(24, 32)
         color = colors[i % len(colors)]
         items.append(
             f'<text x="{x}" y="{y}" transform="rotate({rot},{x},{y})" '
-            f'font-size="{size}" font-family="monospace" font-weight="bold" '
+            f'font-size="{size}" font-family="Arial,monospace" font-weight="bold" '
             f'fill="{color}">{ch}</text>'
         )
     # Noise lines
     lines = []
-    for _ in range(5):
+    for _ in range(4):
         x1,y1 = random.randint(0,width), random.randint(0,height)
         x2,y2 = random.randint(0,width), random.randint(0,height)
-        c = random.choice(['#bdc3c7','#95a5a6','#7f8c8d'])
+        c = random.choice(['#bdc3c7','#95a5a6','#aab7b8'])
         lines.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{c}" stroke-width="1.5"/>')
     # Noise dots
     dots = []
-    for _ in range(30):
+    for _ in range(25):
         cx,cy = random.randint(0,width), random.randint(0,height)
         dots.append(f'<circle cx="{cx}" cy="{cy}" r="1.5" fill="#bdc3c7"/>')
     svg = (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
-        f'style="background:#f8f9fa;border-radius:6px;">'
+        f'style="background:#f4f6f7;border-radius:8px;">'
         + ''.join(lines) + ''.join(dots) + ''.join(items)
         + '</svg>'
     )
-    return svg.encode('utf-8')
+    svg_bytes = svg.encode('utf-8')
+    # Return both raw bytes AND a data URI (used by /api/captcha/image)
+    data_uri = 'data:image/svg+xml;base64,' + base64.b64encode(svg_bytes).decode('ascii')
+    return svg_bytes, data_uri
 
 print("[BOOT] api_server.py starting...", flush=True)
 print(f"[BOOT] Python {sys.version}", flush=True)
@@ -546,23 +548,33 @@ class APIHandler(BaseHTTPRequestHandler):
                 return self._send_json(404, {'error': 'Bus Pass not found.'})
             return self._send_json(200, doc_to_dict(doc))
 
-        # GET /api/captcha — Generate a new captcha image (SVG) + token
+        # GET /api/captcha — Generate a new captcha image (SVG binary) + token
+        # NOTE: Prefer /api/captcha/image for frontend (avoids blob URL race condition)
         if path == '/api/captcha':
             token, text = generate_captcha_token()
-            svg_bytes = draw_captcha_image(text)
+            svg_bytes, data_uri = draw_captcha_image(text)
             # Send SVG image
             self.send_response(200)
             self.send_header('Content-Type', 'image/svg+xml')
             self.send_header('Content-Length', str(len(svg_bytes)))
             self.send_header('X-Captcha-Token', token)  # token sent in header
+            self.send_header('X-Captcha-DataUri', data_uri)  # data URI for convenience
             self.send_header('Access-Control-Allow-Origin', '*')
-            self.send_header('Access-Control-Expose-Headers', 'X-Captcha-Token')
+            self.send_header('Access-Control-Expose-Headers', 'X-Captcha-Token,X-Captcha-DataUri')
             self.send_header('Cache-Control', 'no-store, no-cache')
             self.end_headers()
             self.wfile.write(svg_bytes)
             return
 
+        # GET /api/captcha/image — Returns JSON {token, dataUri} atomically (no race condition)
+        # This is the PREFERRED endpoint for frontend use.
+        if path == '/api/captcha/image':
+            token, text = generate_captcha_token()
+            svg_bytes, data_uri = draw_captcha_image(text)
+            return self._send_json(200, {'token': token, 'dataUri': data_uri})
+
         self._send_json(404, {'error': 'Not found'})
+
 
     # ── POST ─────────────────────────────────────────────────────────────────
     def do_POST(self):
