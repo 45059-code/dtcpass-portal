@@ -241,26 +241,26 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// ── Cron Job (runs inside Render server process) ───────────────────────────────
-// Schedule : Every 10 minutes, ONLY 5:00 AM – 8:50 PM IST
-// Cron expr: */10 5-20 * * *
+// ── Cron Job (runs inside Render server process) ──────────────────────────────────────
+// Schedule: Every 14 minutes, all hours, all days (keeps Render free-tier awake 24/7)
+// Free tier spins down after 15 min of inactivity, so we ping every 14 min to prevent that.
 //
-//  ┌─────── minute  (*/10 = every 10 min)
-//  │   ┌─── hour    (5-20  = 5 AM to 8 PM, last tick at 20:50)
+//  ┌─────── minute  (*/14 = every 14 min)
+//  │   ┌─── hour    (* = every hour, 24/7)
 //  │   │   ┌ day  ┌ month  ┌ weekday
-// */10 5-20 *     *        *
+// */14  *   *     *        *
 
-cron.schedule('*/10 5-20 * * *', async () => {
+cron.schedule('*/14 * * * *', async () => {
   const now = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
   console.log(`[CRON] ⏰ Tick at ${now}`);
 
   try {
-    // ── Task 1: Self health-check ────────────────────────────────────────
+    // ── Task 1: Self health-check ───────────────────────────────────────
     const SELF_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${process.env.PORT || 5000}`;
     const res = await axios.get(`${SELF_URL}/api/health`, { timeout: 8000 });
-    console.log(`[CRON] ✅ Health OK → ${res.data.status}`);
+    console.log(`[CRON] ✅ Health OK → ${res.data.status} (${SELF_URL})`);
 
-    // ── Add more tasks here ──────────────────────────────────────────────
+    // ── Add more tasks here ───────────────────────────────────────
     // await expireOldPasses();
     // await sendReminders();
 
@@ -269,10 +269,10 @@ cron.schedule('*/10 5-20 * * *', async () => {
   }
 }, {
   scheduled: true,
-  timezone: 'Asia/Kolkata'   // IST — Render uses UTC internally, this corrects it
+  timezone: 'Asia/Kolkata'
 });
 
-console.log('[CRON] 🚀 Scheduled: every 10 min, 5 AM–9 PM IST (*/10 5-20 * * * Asia/Kolkata)');
+console.log('[CRON] 🚀 Scheduled: every 14 min, 24/7 (*/14 * * * * Asia/Kolkata) — keeps Render awake');
 
 // ── Start Server ──────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
