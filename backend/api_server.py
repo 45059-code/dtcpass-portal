@@ -141,19 +141,22 @@ def get_settings_collection():
     """Helper to safely get settings collection for both real PyMongo and MockCollection."""
     global db_col, _real_db
     if isinstance(db_col, MockCollection):
-        class MockSettingsCol:
+        # Use the MockCollection itself as the settings store
+        # Build a thin adapter so the API is the same as real pymongo
+        _mock_col = db_col  # capture reference
+        class _MockSettingsCol:
             def find_one(self, query):
                 if query.get('_id') == 'registration':
-                    return db_col.settings_store.get('registration')
+                    return _mock_col.settings_store.get('registration')
                 return None
             def update_one(self, query, update, upsert=False):
                 if query.get('_id') == 'registration' and '$set' in update:
-                    if 'registration' not in db_col.settings_store:
-                        db_col.settings_store['registration'] = {'_id': 'registration'}
-                    db_col.settings_store['registration'].update(update['$set'])
+                    if 'registration' not in _mock_col.settings_store:
+                        _mock_col.settings_store['registration'] = {'_id': 'registration'}
+                    _mock_col.settings_store['registration'].update(update['$set'])
                 return None
-        return MockSettingsCol()
-    
+        return _MockSettingsCol()
+
     # Real MongoDB path: use the stored database reference
     if _real_db is not None:
         try:
@@ -178,7 +181,12 @@ def _load_registration_setting():
         print(f"[WARN] Could not load registration setting from DB: {e}", flush=True)
 
 def _save_registration_setting(value):
-    """Persist allow_registration to MongoDB settings collection."""
+    """Persist allow_registration to MongoDB settings collection.
+    
+    NOTE: This always succeeds — if the DB collection is unavailable,
+    the value is kept in memory only (ALLOW_REGISTRATION global) and a
+    warning is printed. This prevents the frontend toggle from reverting.
+    """
     try:
         col = get_settings_collection()
         if col is not None:
@@ -189,10 +197,12 @@ def _save_registration_setting(value):
             )
             print(f"[INFO] Saved registration setting to DB: {value}", flush=True)
         else:
-            raise RuntimeError("Settings collection not available")
+            # DB not ready yet — value is already updated in ALLOW_REGISTRATION global,
+            # so the setting is still effective for this server session.
+            print(f"[WARN] Settings collection unavailable — value saved in memory only: {value}", flush=True)
     except Exception as e:
-        print(f"[WARN] Could not save registration setting to DB: {e}", flush=True)
-        raise e
+        # Don't re-raise — the global is already updated so the toggle worked.
+        print(f"[WARN] Could not persist registration setting to DB: {e}", flush=True)
 
 # ── MongoDB connection ─────────────────────────────────────────────────────────
 # ── Mock Database for Offline/Fallback Mode ────────────────────────────────────
@@ -288,7 +298,7 @@ class MockCollection:
 db_col = MockCollection()
 
 def connect_db_async():
-    global db_col
+    global db_col, _real_db  # ← CRITICAL: must declare _real_db as global here
     if HAS_MONGO and MONGODB_URI and MONGODB_URI not in ('', 'YOUR_MONGODB_URI_HERE'):
         try:
             # Patch DNS inside the thread so it never blocks the main server startup
@@ -311,9 +321,9 @@ def connect_db_async():
             real_db_col = real_db['passes']
             real_db_col.find_one({})  # Test connection
             db_col = real_db_col
-            _real_db = real_db  # store db reference for settings
+            _real_db = real_db  # ← NOW correctly sets the global (not a local variable)
             print("[OK] MongoDB Atlas connected successfully!", flush=True)
-            _load_registration_setting()
+            _load_registration_setting()  # ← now works because _real_db is set globally
         except Exception as e:
             print(f"[WARN] MongoDB connection failed: {e}", flush=True)
             print("[INFO] Falling back to in-memory mock database.", flush=True)
