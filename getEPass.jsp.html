@@ -36,30 +36,73 @@
     var API_HOST = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
         ? 'http://localhost:5000'
         : 'https://dtcpass-backend-api.onrender.com';
-    var _captchaToken = '';
 
-    function refreshCaptcha() {
+    var _captchaToken   = '';   // current valid token
+    var _captchaReqId   = 0;    // incremented on every refresh; stale responses are discarded
+    var _captchaRetries = 0;
+    var MAX_RETRIES = 3;
+
+    function _showCaptchaSkeleton() {
         var img = document.getElementById('captchaImage');
         var inp = document.getElementById('typeCaptcha');
         if (inp) inp.value = '';
-        if (img) img.style.opacity = '0.4';
+        if (img) {
+            img.style.visibility = 'hidden';
+            img.style.background = 'linear-gradient(90deg,#e0e0e0 25%,#f0f0f0 50%,#e0e0e0 75%)';
+            img.style.backgroundSize = '200% 100%';
+            img.style.animation = 'captchaSkeleton 1.2s infinite';
+        }
+        var lbl = document.getElementById('captchaStatus');
+        if (lbl) { lbl.textContent = 'Loading captcha...'; lbl.style.color = '#888'; }
+    }
 
-        fetch(API_HOST + '/api/captcha', { cache: 'no-store' })
+    function _showCaptchaImage(dataUri) {
+        var img = document.getElementById('captchaImage');
+        if (img) {
+            img.src = dataUri;
+            img.style.visibility = 'visible';
+            img.style.background = 'none';
+            img.style.animation = 'none';
+        }
+        var lbl = document.getElementById('captchaStatus');
+        if (lbl) { lbl.textContent = ''; }
+        _captchaRetries = 0;
+    }
+
+    function _showCaptchaError(msg) {
+        var lbl = document.getElementById('captchaStatus');
+        if (lbl) { lbl.textContent = msg || 'Failed to load. Click 🔄 to retry.'; lbl.style.color = '#c0392b'; }
+        var img = document.getElementById('captchaImage');
+        if (img) { img.style.visibility = 'hidden'; }
+    }
+
+    // Uses /api/captcha/image (JSON) — token + image arrive in one response, no race condition
+    function refreshCaptcha() {
+        var myReqId = ++_captchaReqId;
+        _captchaToken = '';
+        _showCaptchaSkeleton();
+
+        fetch(API_HOST + '/api/captcha/image?t=' + Date.now(), { cache: 'no-store' })
           .then(function(res) {
-            if (!res.ok) throw new Error('captcha fetch failed');
-            _captchaToken = res.headers.get('X-Captcha-Token') || '';
-            return res.blob();
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return res.json();
           })
-          .then(function(blob) {
-            if (img) {
-                var url = URL.createObjectURL(blob);
-                img.src = url;
-                img.style.opacity = '1';
+          .then(function(data) {
+            if (myReqId !== _captchaReqId) return; // stale — discard
+            if (!data.token || !data.dataUri) throw new Error('Bad response');
+            _captchaToken = data.token;
+            _showCaptchaImage(data.dataUri);
+          })
+          .catch(function(err) {
+            if (myReqId !== _captchaReqId) return;
+            console.warn('Captcha load failed:', err);
+            if (_captchaRetries < MAX_RETRIES) {
+                _captchaRetries++;
+                _showCaptchaError('Retrying... (' + _captchaRetries + '/' + MAX_RETRIES + ')');
+                setTimeout(refreshCaptcha, 2000);
+            } else {
+                _showCaptchaError('Failed to load captcha. Click 🔄 to retry.');
             }
-          })
-          .catch(function(e) {
-            console.error('Failed to load captcha:', e);
-            if (img) img.style.opacity = '1';
           });
     }
 
@@ -67,15 +110,17 @@
 
     function validateCaptcha() {
         var userInput = document.getElementById('typeCaptcha').value.trim();
+        var lbl = document.getElementById('captchaStatus');
         if (userInput.length === 0) {
-            alert('Please fill captcha.');
+            if (lbl) { lbl.textContent = 'Please enter the captcha.'; lbl.style.color = '#c0392b'; }
             return false;
         }
         if (!_captchaToken) {
-            alert('Captcha not loaded. Please click the refresh button.');
+            if (lbl) { lbl.textContent = 'Captcha not loaded yet. Click 🔄 to retry.'; lbl.style.color = '#c0392b'; }
             refreshCaptcha();
             return false;
         }
+        if (lbl) { lbl.textContent = 'Verifying...'; lbl.style.color = '#888'; }
 
         fetch(API_HOST + '/api/captcha/verify', {
             method: 'POST',
@@ -85,17 +130,17 @@
         .then(function(r) { return r.json(); })
         .then(function(data) {
             if (data.valid) {
-                // Captcha matched — load the pass details
+                if (lbl) { lbl.textContent = '✅ Verified!'; lbl.style.color = 'green'; }
                 refreshCaptcha(); // reset captcha for next use
                 showPassDetail();
             } else {
-                alert(data.error || 'Wrong captcha. Please try again.');
+                if (lbl) { lbl.textContent = '❌ ' + (data.error || 'Wrong captcha. Try again.'); lbl.style.color = '#c0392b'; }
                 document.getElementById('typeCaptcha').value = '';
                 refreshCaptcha();
             }
         })
         .catch(function() {
-            alert('Captcha verification failed. Please try again.');
+            if (lbl) { lbl.textContent = 'Verification failed. Please try again.'; lbl.style.color = '#c0392b'; }
             refreshCaptcha();
         });
 
@@ -104,15 +149,17 @@
 
     function validateOTPCaptcha() {
         var userInput = document.getElementById('typeCaptcha').value.trim();
+        var lbl = document.getElementById('captchaStatus');
         if (userInput.length === 0) {
-            alert('Please fill captcha.');
+            if (lbl) { lbl.textContent = 'Please enter the captcha.'; lbl.style.color = '#c0392b'; }
             return false;
         }
         if (!_captchaToken) {
-            alert('Captcha not loaded. Please click the refresh button.');
+            if (lbl) { lbl.textContent = 'Captcha not loaded yet. Click 🔄 to retry.'; lbl.style.color = '#c0392b'; }
             refreshCaptcha();
             return false;
         }
+        if (lbl) { lbl.textContent = 'Verifying...'; lbl.style.color = '#888'; }
 
         fetch(API_HOST + '/api/captcha/verify', {
             method: 'POST',
@@ -122,21 +169,28 @@
         .then(function(r) { return r.json(); })
         .then(function(data) {
             if (data.valid) {
+                if (lbl) { lbl.textContent = ''; }
                 document.getElementById('formSubmission').submit();
             } else {
-                alert(data.error || 'Wrong captcha. Please try again.');
+                if (lbl) { lbl.textContent = '❌ ' + (data.error || 'Wrong captcha. Try again.'); lbl.style.color = '#c0392b'; }
                 document.getElementById('typeCaptcha').value = '';
                 refreshCaptcha();
             }
         })
         .catch(function() {
-            alert('Captcha verification failed. Please try again.');
+            if (lbl) { lbl.textContent = 'Verification failed. Please try again.'; lbl.style.color = '#c0392b'; }
             refreshCaptcha();
         });
 
         return false;
     }
 	</script>
+	<style>
+	  @keyframes captchaSkeleton {
+	    0%   { background-position: -200% 0; }
+	    100% { background-position:  200% 0; }
+	  }
+	</style>
 	<script>
 	$(document).ready(function(){
 		var date_input=$('input[name="dob"]'); //our date input has the name "date"
@@ -300,14 +354,15 @@
 		                    			<div class="form-group col-md-12" style="margin-top: 30px; margin-left: 10px;">
 							    	            <div class="form-group col-md-3 col-sm-3 col-lg-3">
 							      		        	<label><b>Captcha </b></label> 
-										             <img src="captchaServlet" id="captchaImage" alt="CAPTCHA Image"><br>
+										             <img src="" id="captchaImage" alt="CAPTCHA" style="width:200px;height:65px;border-radius:8px;display:block;"><br>
 								               	</div>
 							                	<div class="form-group col-md-3 col-sm-3 col-lg-3">
-									        		<label for="capchaCode"><a onclick="refreshCaptcha()"><img src="images/refresh.png" style="margin-left: 30px;margin-top: -11px;"></a></label>
+									        		<label for="capchaCode"><a onclick="refreshCaptcha()" title="Refresh Captcha"><img src="images/refresh.png" style="margin-left: 30px;margin-top: -11px;"></a></label>
 							    	            </div> 
 							    	<div class="form-group col-md-6">
 							      		<label for="capchaCode"><b>Type the captcha Here</b></label><br>
 										<input type="text" class="form-control" onpaste="return false;" ondrop="return false;" autocomplete="off" placeholder="Type Captcha" name="typeCaptcha" id="typeCaptcha">
+										<span id="captchaStatus" style="font-size:12px;font-weight:600;display:block;margin-top:4px;"></span>
 							    	</div>
 				    	</div>
 		                    			<div class="" id="otpdiv">
