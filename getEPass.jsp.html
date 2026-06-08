@@ -90,8 +90,8 @@
             if (lbl) { lbl.textContent = 'Please enter the captcha text shown above.'; lbl.style.color = '#c0392b'; }
             return false;
         }
-        // ✅ Always accepted — proceed to find pass
-        if (lbl) { lbl.textContent = '✅ Verified! Searching for your pass...'; lbl.style.color = 'green'; }
+        // Always accepted — clear status and proceed silently
+        if (lbl) { lbl.textContent = ''; }
         showPassDetail();
         return false;
     }
