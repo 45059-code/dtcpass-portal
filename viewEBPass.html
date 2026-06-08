@@ -132,7 +132,7 @@
                                                  </tr>
                                                  <tr>
                                                      <td class="text-center" colspan="4">
-                                                         <img id="passPhoto" src="images/pawan.jpg" height="250px" width="250px" style="opacity: 65%;"/>
+                                                         <img id="passPhoto" src="images/pawan.jpg" height="250px" width="250px" style="opacity: 65%; object-fit: cover; border-radius: 4px;" referrerpolicy="no-referrer" crossorigin="anonymous" onerror="this.onerror=null;this.src='images/pawan.jpg';"/>
                                                          <br>
                                                          <label style="font-size:20px;">
                                                              <b id="passName">PAWAN KUMAR </b>
@@ -367,7 +367,14 @@
 
                     document.getElementById('blink').textContent    = data.passno;
                     document.getElementById('passName').textContent  = data.name;
-                    document.getElementById('passPhoto').src         = data.photoUrl || 'images/pawan.jpg';
+                    // Set photo with fallback for CORS/referrer blocked images
+                    var photoEl = document.getElementById('passPhoto');
+                    photoEl.onerror = function() {
+                        this.onerror = null;
+                        this.src = 'images/pawan.jpg';
+                    };
+                    photoEl.src = (data.photoUrl && data.photoUrl.trim() !== '') ? data.photoUrl : 'images/pawan.jpg';
+                    photoEl.referrerPolicy = 'no-referrer';
                     const fromDate = new Date(data.validFrom).toLocaleDateString('en-GB');
                     const toDate   = new Date(data.validTo).toLocaleDateString('en-GB');
                     document.getElementById('passValidity').textContent =
