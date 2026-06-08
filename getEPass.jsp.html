@@ -330,7 +330,7 @@
 	                <div class="quick">
 	                   <h5 class="text-center" style="color:#01a2a6;"><u>Get Your e-BusPass</u></h5>
 	                   <hr class="divider bg-madison hr-sm-left-0">
-		                   <form class="rd-mailform text-left " action="viewEBPass.html" method="get" id="formSubmission">
+		                   <form class="rd-mailform text-left" onsubmit="return false;" id="formSubmission">
 								<input type="hidden" name="csrfToken" value="">
 								<p class="text-danger" style="margin-left:380px;"></p>
 								<div class="range">
@@ -338,7 +338,7 @@
 									<div class="cell-lg-4">
 		                        		<div class="form-group">
 		                        			<label><b>Enter e-BusPass Number</b><font color="red">&nbsp;*</font></label>
-							      			<input type="text" placeholder="Enter Your e-BusPass Number" class="form-control" id="passno" name="passno" required="" onkeypress="return numbersonly(event);">
+							      			<input type="text" placeholder="Enter Your e-BusPass Number" class="form-control" id="passno" name="passno" onkeypress="return numbersonly(event);">
 		                    			</div>
 		                    			<div class="form-group" style="text-align:center;">
 		                        			<label style="font-size:16px;"><b>------ OR ------</b></label>
@@ -672,9 +672,24 @@
 	} 
 	</script>
 	<script>
-	// Clear any active pass session when loading the page (including via back button)
-	window.addEventListener('pageshow', function() {
-		sessionStorage.clear();
+	// Clear pass sessions only on fresh initial page load (not bfcache restores).
+	// IMPORTANT: Do NOT clear if we just set an epass_authenticated_ key (i.e., navigating to viewEBPass).
+	window.addEventListener('pageshow', function(e) {
+		// e.persisted = true means the page came from browser back/forward cache.
+		// In that case, we do NOT clear — the user already auth'd and shouldn't be kicked out.
+		if (e.persisted) return;
+		// Only clear keys that are NOT epass_authenticated_ (those belong to viewEBPass auth)
+		var keysToRemove = [];
+		for (var i = 0; i < sessionStorage.length; i++) {
+			var k = sessionStorage.key(i);
+			// Preserve epass_authenticated_ and pass_session_ keys for a few seconds
+			// so that the redirect to viewEBPass can read them
+			if (!k || k.startsWith('epass_authenticated_') || k.startsWith('pass_session_') || k.startsWith('epass_scan_mode_')) {
+				continue;
+			}
+			keysToRemove.push(k);
+		}
+		keysToRemove.forEach(function(k) { sessionStorage.removeItem(k); });
 	});
 	</script>
 </html>
