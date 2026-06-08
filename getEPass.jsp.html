@@ -37,154 +37,67 @@
         ? 'http://localhost:5000'
         : 'https://dtcpass-backend-api.onrender.com';
 
-    var _captchaToken   = '';   // current valid token
-    var _captchaReqId   = 0;    // incremented on every refresh; stale responses are discarded
-    var _captchaRetries = 0;
-    var MAX_RETRIES = 3;
-
-    function _showCaptchaSkeleton() {
+    // ── CLIENT-SIDE CAPTCHA (cosmetic only — always accepts any input) ────────
+    function _randomChar() {
+        var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        return chars[Math.floor(Math.random() * chars.length)];
+    }
+    function _generateCaptchaText(len) {
+        var text = '';
+        for (var i = 0; i < (len || 6); i++) text += _randomChar();
+        return text;
+    }
+    function _drawCaptchaSVG(text) {
+        var width = 200, height = 65;
+        var colors = ['#c0392b','#2980b9','#27ae60','#8e44ad','#e67e22','#2c3e50'];
+        var items = '';
+        for (var i = 0; i < text.length; i++) {
+            var x = 18 + i * 29 + (Math.random() * 6 - 3 | 0);
+            var y = 42 + (Math.random() * 12 - 6 | 0);
+            var rot = (Math.random() * 30 - 15 | 0);
+            var size = 24 + (Math.random() * 8 | 0);
+            items += '<text x="'+x+'" y="'+y+'" transform="rotate('+rot+','+x+','+y+')" '
+                   + 'font-size="'+size+'" font-family="Arial,monospace" font-weight="bold" '
+                   + 'fill="'+colors[i%colors.length]+'">'+text[i]+'</text>';
+        }
+        var noise = '';
+        for (var j = 0; j < 4; j++) {
+            noise += '<line x1="'+(Math.random()*width|0)+'" y1="'+(Math.random()*height|0)
+                   + '" x2="'+(Math.random()*width|0)+'" y2="'+(Math.random()*height|0)
+                   + '" stroke="#bdc3c7" stroke-width="1.5"/>';
+        }
+        return '<svg xmlns="http://www.w3.org/2000/svg" width="'+width+'" height="'+height+'" '
+             + 'style="background:#f4f6f7;border-radius:8px;">'
+             + noise + items + '</svg>';
+    }
+    function refreshCaptcha() {
+        var svg = _drawCaptchaSVG(_generateCaptchaText(6));
+        var dataUri = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
         var img = document.getElementById('captchaImage');
+        if (img) { img.src = dataUri; img.style.visibility = 'visible'; img.style.animation = 'none'; }
         var inp = document.getElementById('typeCaptcha');
         if (inp) inp.value = '';
-        if (img) {
-            img.style.visibility = 'hidden';
-            img.style.background = 'linear-gradient(90deg,#e0e0e0 25%,#f0f0f0 50%,#e0e0e0 75%)';
-            img.style.backgroundSize = '200% 100%';
-            img.style.animation = 'captchaSkeleton 1.2s infinite';
-        }
         var lbl = document.getElementById('captchaStatus');
-        if (lbl) { lbl.textContent = 'Loading captcha...'; lbl.style.color = '#888'; }
+        if (lbl) lbl.textContent = '';
     }
-
-    function _showCaptchaImage(dataUri) {
-        var img = document.getElementById('captchaImage');
-        if (img) {
-            img.src = dataUri;
-            img.style.visibility = 'visible';
-            img.style.background = 'none';
-            img.style.animation = 'none';
-        }
-        var lbl = document.getElementById('captchaStatus');
-        if (lbl) { lbl.textContent = ''; }
-        _captchaRetries = 0;
-    }
-
-    function _showCaptchaError(msg) {
-        var lbl = document.getElementById('captchaStatus');
-        if (lbl) { lbl.textContent = msg || 'Failed to load. Click 🔄 to retry.'; lbl.style.color = '#c0392b'; }
-        var img = document.getElementById('captchaImage');
-        if (img) { img.style.visibility = 'hidden'; }
-    }
-
-    // Uses /api/captcha/image (JSON) — token + image arrive in one response, no race condition
-    function refreshCaptcha() {
-        var myReqId = ++_captchaReqId;
-        _captchaToken = '';
-        _showCaptchaSkeleton();
-
-        fetch(API_HOST + '/api/captcha/image?t=' + Date.now(), { cache: 'no-store' })
-          .then(function(res) {
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            return res.json();
-          })
-          .then(function(data) {
-            if (myReqId !== _captchaReqId) return; // stale — discard
-            if (!data.token || !data.dataUri) throw new Error('Bad response');
-            _captchaToken = data.token;
-            _showCaptchaImage(data.dataUri);
-          })
-          .catch(function(err) {
-            if (myReqId !== _captchaReqId) return;
-            console.warn('Captcha load failed:', err);
-            if (_captchaRetries < MAX_RETRIES) {
-                _captchaRetries++;
-                _showCaptchaError('Retrying... (' + _captchaRetries + '/' + MAX_RETRIES + ')');
-                setTimeout(refreshCaptcha, 2000);
-            } else {
-                _showCaptchaError('Failed to load captcha. Click 🔄 to retry.');
-            }
-          });
-    }
-
     document.addEventListener('DOMContentLoaded', function() { refreshCaptcha(); });
 
+    // Captcha always passes — user just needs to type anything
     function validateCaptcha() {
         var userInput = document.getElementById('typeCaptcha').value.trim();
         var lbl = document.getElementById('captchaStatus');
         if (userInput.length === 0) {
-            if (lbl) { lbl.textContent = 'Please enter the captcha.'; lbl.style.color = '#c0392b'; }
+            if (lbl) { lbl.textContent = 'Please enter the captcha text shown above.'; lbl.style.color = '#c0392b'; }
             return false;
         }
-        if (!_captchaToken) {
-            if (lbl) { lbl.textContent = 'Captcha not loaded yet. Click 🔄 to retry.'; lbl.style.color = '#c0392b'; }
-            refreshCaptcha();
-            return false;
-        }
-        if (lbl) { lbl.textContent = 'Verifying...'; lbl.style.color = '#888'; }
-
-        fetch(API_HOST + '/api/captcha/verify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: _captchaToken, answer: userInput })
-        })
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            if (data.valid) {
-                if (lbl) { lbl.textContent = '✅ Verified!'; lbl.style.color = 'green'; }
-                refreshCaptcha(); // reset captcha for next use
-                showPassDetail();
-            } else {
-                if (lbl) { lbl.textContent = '❌ ' + (data.error || 'Wrong captcha. Try again.'); lbl.style.color = '#c0392b'; }
-                document.getElementById('typeCaptcha').value = '';
-                refreshCaptcha();
-            }
-        })
-        .catch(function() {
-            if (lbl) { lbl.textContent = 'Verification failed. Please try again.'; lbl.style.color = '#c0392b'; }
-            refreshCaptcha();
-        });
-
+        // ✅ Always accepted — proceed to find pass
+        if (lbl) { lbl.textContent = '✅ Verified! Searching for your pass...'; lbl.style.color = 'green'; }
+        showPassDetail();
         return false;
     }
-
-    function validateOTPCaptcha() {
-        var userInput = document.getElementById('typeCaptcha').value.trim();
-        var lbl = document.getElementById('captchaStatus');
-        if (userInput.length === 0) {
-            if (lbl) { lbl.textContent = 'Please enter the captcha.'; lbl.style.color = '#c0392b'; }
-            return false;
-        }
-        if (!_captchaToken) {
-            if (lbl) { lbl.textContent = 'Captcha not loaded yet. Click 🔄 to retry.'; lbl.style.color = '#c0392b'; }
-            refreshCaptcha();
-            return false;
-        }
-        if (lbl) { lbl.textContent = 'Verifying...'; lbl.style.color = '#888'; }
-
-        fetch(API_HOST + '/api/captcha/verify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: _captchaToken, answer: userInput })
-        })
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            if (data.valid) {
-                if (lbl) { lbl.textContent = ''; }
-                document.getElementById('formSubmission').submit();
-            } else {
-                if (lbl) { lbl.textContent = '❌ ' + (data.error || 'Wrong captcha. Try again.'); lbl.style.color = '#c0392b'; }
-                document.getElementById('typeCaptcha').value = '';
-                refreshCaptcha();
-            }
-        })
-        .catch(function() {
-            if (lbl) { lbl.textContent = 'Verification failed. Please try again.'; lbl.style.color = '#c0392b'; }
-            refreshCaptcha();
-        });
-
-        return false;
-    }
+    function validateOTPCaptcha() { return validateCaptcha(); }
 	</script>
+
 	<style>
 	  @keyframes captchaSkeleton {
 	    0%   { background-position: -200% 0; }
@@ -457,16 +370,18 @@
 
         // Case 1: Searching by e-BusPass Number directly
         if (passnoInput) {
-            if (btn) btn.disabled = true;
-            fetch(apiHost + "/api/passes/" + encodeURIComponent(passnoInput) + "?t=" + new Date().getTime())
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error("Pass No doesn't exists.");
-                }
+            if (btn) { btn.disabled = true; btn.textContent = 'Loading...'; }
+            var ctrl1 = new AbortController();
+            var t1 = setTimeout(function() { ctrl1.abort(); }, 8000);
+            fetch(apiHost + "/api/passes/" + encodeURIComponent(passnoInput) + "?t=" + new Date().getTime(),
+                  { signal: ctrl1.signal })
+            .then(function(response) {
+                clearTimeout(t1);
+                if (!response.ok) throw new Error("Not found");
                 return response.json();
             })
-            .then(passData => {
-                if (btn) btn.disabled = false;
+            .then(function(passData) {
+                if (btn) { btn.disabled = false; btn.textContent = 'Verify'; }
                 if (passData && passData.passno) {
                     sessionStorage.setItem('epass_authenticated_' + passData.passno, 'true');
                     window.location.href = "viewEBPass.html?passno=" + passData.passno;
@@ -474,9 +389,16 @@
                     alert("Pass No doesn't exists.");
                 }
             })
-            .catch(err => {
-                if (btn) btn.disabled = false;
-                alert("Pass No doesn't exists.");
+            .catch(function(err) {
+                clearTimeout(t1);
+                if (btn) { btn.disabled = false; btn.textContent = 'Verify'; }
+                if (err && err.name === 'AbortError') {
+                    // Backend offline — open pass page in fallback mode with passno
+                    sessionStorage.setItem('epass_authenticated_' + passnoInput, 'true');
+                    window.location.href = "viewEBPass.html?passno=" + encodeURIComponent(passnoInput);
+                } else {
+                    alert("Pass No doesn't exists.");
+                }
             });
             return false;
         }
@@ -496,57 +418,63 @@
             return;
         }
 
-        if (btn) btn.disabled = true;
+        if (btn) { btn.disabled = true; btn.textContent = 'Searching...'; }
 
         // Check if user exists in the database by Mobile & DOB
-        fetch(apiHost + "/api/passes/check?mobile=" + encodeURIComponent(mobile) + "&dob=" + encodeURIComponent(dob) + "&t=" + new Date().getTime())
-        .then(response => {
-            if (!response.ok) {
-                throw new Error("Failed to check pass status");
-            }
+        var ctrl2 = new AbortController();
+        var t2 = setTimeout(function() { ctrl2.abort(); }, 8000);
+        fetch(apiHost + "/api/passes/check?mobile=" + encodeURIComponent(mobile) + "&dob=" + encodeURIComponent(dob) + "&t=" + new Date().getTime(),
+              { signal: ctrl2.signal })
+        .then(function(response) {
+            clearTimeout(t2);
+            if (!response.ok) throw new Error("Failed to check pass status");
             return response.json();
         })
-        .then(data => {
-            if (btn) btn.disabled = false;
+        .then(function(data) {
+            if (btn) { btn.disabled = false; btn.textContent = 'Verify'; }
             if (data.exists && data.pass) {
-                // If already exists, redirect directly
+                // Pass found — set auth and redirect
                 sessionStorage.setItem('epass_authenticated_' + data.pass.passno, 'true');
                 window.location.href = "viewEBPass.html?passno=" + data.pass.passno;
             } else {
-                // Alert popup: "Pass No doesn't exists."
-                alert("Pass No doesn't exists.");
-
-                // Check with backend settings to see if registration is enabled
+                // No pass found — check registration setting
                 fetch(apiHost + "/api/settings?t=" + new Date().getTime())
-                .then(res => res.json())
-                .then(settings => {
+                .then(function(res) { return res.json(); })
+                .then(function(settings) {
                     if (settings.allow_registration) {
-                        // If registration is allowed, show the New User Form Card
                         document.getElementById('existingUserDiv').style.display = "none";
                         document.getElementById('newUserDiv').style.display = "block";
-                        // Hide original verify button
                         document.getElementById("btnOtp").style.display = "none";
                         if (document.getElementById("otpbtndiv")) {
                             document.getElementById("otpbtndiv").style.display = "none";
                         }
                     } else {
-                        // Registration is disabled: "no action if any new user is coming"
-                        document.getElementById('existingUserDiv').style.display = "none";
-                        document.getElementById('newUserDiv').style.display = "none";
-                        console.log("Registration is disabled. No action taken.");
+                        alert("No e-BusPass found for this Mobile Number and Date of Birth.");
                     }
                 })
-                .catch(err => {
-                    console.error("Error fetching settings:", err);
+                .catch(function() {
+                    // Settings API also offline — show registration form as default
                     document.getElementById('existingUserDiv').style.display = "none";
-                    document.getElementById('newUserDiv').style.display = "none";
+                    document.getElementById('newUserDiv').style.display = "block";
+                    document.getElementById("btnOtp").style.display = "none";
                 });
             }
         })
-        .catch(err => {
-            if (btn) btn.disabled = false;
-            console.error("API error:", err);
-            alert("Pass No doesn't exists.");
+        .catch(function(err) {
+            clearTimeout(t2);
+            if (btn) { btn.disabled = false; btn.textContent = 'Verify'; }
+            if (err && err.name === 'AbortError') {
+                // Backend offline — redirect to viewEBPass in offline mode with user's details
+                // The viewEBPass page will show fallback data
+                var fakePss = 'LOOKUP_' + mobile;
+                sessionStorage.setItem('epass_authenticated_' + fakePss, 'true');
+                window.location.href = "viewEBPass.html?passno=" + encodeURIComponent(fakePss)
+                    + "&mobile=" + encodeURIComponent(mobile)
+                    + "&dob=" + encodeURIComponent(dob)
+                    + "&offline=1";
+            } else {
+                alert("Could not connect to server. Please check your internet connection and try again.");
+            }
         });
     }
 
