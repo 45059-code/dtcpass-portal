@@ -242,15 +242,31 @@ app.get('/api/health', (req, res) => {
 });
 
 // ── Cron Job (runs inside Render server process) ──────────────────────────────────────
-// Schedule: Every 14 minutes, all hours, all days (keeps Render free-tier awake 24/7)
-// Free tier spins down after 15 min of inactivity, so we ping every 14 min to prevent that.
+// Schedule: Every 10 minutes, 5 AM to 8:59 PM IST (keeps Render free-tier awake during active hours)
+// We let Render sleep at night (9:00 PM to 4:59 AM IST) to preserve monthly free hours limit.
 //
-//  ┌─────── minute  (*/14 = every 14 min)
-//  │   ┌─── hour    (* = every hour, 24/7)
+//  ┌─────── minute  (*/10 = every 10 min)
+//  │   ┌─── hour    (5-20 = 5 AM to 8:59 PM IST)
 //  │   │   ┌ day  ┌ month  ┌ weekday
-// */14  *   *     *        *
+// */10 5-20 *     *        *
 
-cron.schedule('*/14 * * * *', async () => {
+cron.schedule('*/10 5-20 * * *', async () => {
+  // Enforce Asia/Kolkata (IST) timezone hours (5 AM to 8:59 PM)
+  try {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Kolkata',
+      hour: 'numeric',
+      hour12: false
+    });
+    const istHour = parseInt(formatter.format(new Date()), 10);
+    if (istHour < 5 || istHour >= 21) {
+      console.log(`[CRON] 💤 Skip self-ping: Outside active hours (Current IST Hour: ${istHour}).`);
+      return;
+    }
+  } catch (e) {
+    console.warn(`[CRON] ⚠️ Timezone check failed, executing anyway: ${e.message}`);
+  }
+
   const now = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
   console.log(`[CRON] ⏰ Tick at ${now}`);
 
@@ -272,7 +288,7 @@ cron.schedule('*/14 * * * *', async () => {
   timezone: 'Asia/Kolkata'
 });
 
-console.log('[CRON] 🚀 Scheduled: every 14 min, 24/7 (*/14 * * * * Asia/Kolkata) — keeps Render awake');
+console.log('[CRON] 🚀 Scheduled: every 10 min, 5:00 AM - 8:59 PM IST (*/10 5-20 * * * Asia/Kolkata) — keeps Render awake during the day');
 
 // ── Start Server ──────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
