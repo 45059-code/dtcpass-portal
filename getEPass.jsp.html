@@ -384,6 +384,7 @@
                 if (btn) { btn.disabled = false; btn.textContent = 'Verify'; }
                 if (passData && passData.passno) {
                     sessionStorage.setItem('epass_authenticated_' + passData.passno, 'true');
+                    sessionStorage.setItem('epass_data_' + passData.passno, JSON.stringify(passData));
                     window.location.href = "viewEBPass.html?passno=" + passData.passno;
                 } else {
                     alert("Pass No doesn't exists.");
@@ -435,6 +436,7 @@
             if (data.exists && data.pass) {
                 // Pass found — set auth and redirect
                 sessionStorage.setItem('epass_authenticated_' + data.pass.passno, 'true');
+                sessionStorage.setItem('epass_data_' + data.pass.passno, JSON.stringify(data.pass));
                 window.location.href = "viewEBPass.html?passno=" + data.pass.passno;
             } else {
                 // No pass found — check registration setting
@@ -545,6 +547,17 @@
             if (data.success && data.passno) {
                 alert("e-BusPass generated successfully! Pass Number: " + data.passno);
                 sessionStorage.setItem('epass_authenticated_' + data.passno, 'true');
+                // Store registration data in sessionStorage
+                var regData = {
+                    passno: data.passno,
+                    name: name.toUpperCase(),
+                    mobile: mobile,
+                    dob: dob,
+                    photoUrl: '', // Will get updated by background fetch
+                    validFrom: new Date().toISOString(),
+                    validTo: new Date(Date.now() + 150 * 24 * 60 * 60 * 1000).toISOString()
+                };
+                sessionStorage.setItem('epass_data_' + data.passno, JSON.stringify(regData));
                 window.location.href = "viewEBPass.html?passno=" + data.passno;
             } else {
                 alert("Failed to generate e-BusPass.");
