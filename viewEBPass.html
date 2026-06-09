@@ -152,8 +152,8 @@
                                                  <tr>
                                                      <td class="text-center" colspan="4">
                                                          <div id="photoWrapper">
-                                                           <img id="passPhoto" src="" height="250px" width="250px" style="opacity: 65%; object-fit: cover; border-radius: 4px; display:none;" referrerpolicy="no-referrer" crossorigin="anonymous"
-                                                                onload="this.style.display='block';document.getElementById('photoWrapper').classList.add('loaded');"
+                                                           <img id="passPhoto" src="" height="250px" width="250px" style="opacity: 65%; object-fit: cover; border-radius: 4px; display:none;" referrerpolicy="no-referrer"
+                                                                onload="this.style.display='block';document.getElementById('photoWrapper').classList.add('loaded'); sessionStorage.setItem('passPhotoCache', this.src);"
                                                                 onerror="this.onerror=null;this.src='images/pawan.jpg';this.style.display='block';document.getElementById('photoWrapper').classList.add('loaded');"/>
                                                          </div>
                                                          <br>
@@ -375,6 +375,28 @@
                 }
 
                 // ── helpers ────────────────────────────────────────────────
+                function renderPassData(data) {
+                    document.getElementById('blink').textContent    = data.passno;
+                    document.getElementById('passName').textContent  = data.name;
+                    // Set photo with fallback for CORS/referrer blocked images
+                    var photoEl = document.getElementById('passPhoto');
+                    photoEl.onerror = function() {
+                        this.onerror = null;
+                        this.src = 'images/pawan.jpg';
+                    };
+                    photoEl.src = (data.photoUrl && data.photoUrl.trim() !== '') ? data.photoUrl : 'images/pawan.jpg';
+                    photoEl.referrerPolicy = 'no-referrer';
+                    const fromDate = new Date(data.validFrom).toLocaleDateString('en-GB');
+                    const toDate   = new Date(data.validTo).toLocaleDateString('en-GB');
+                    document.getElementById('passValidity').textContent =
+                        'Valid from ' + fromDate + ' to ' + toDate;
+                    renderQR(data.passno, data.qrCodeUrl);
+
+                    // Show pass and hide loading
+                    document.getElementById('passLoading').style.display = 'none';
+                    document.getElementById('passContainer').style.display = 'block';
+                }
+
                 function setFallback() {
                     document.getElementById('blink').textContent   = passno.startsWith('LOOKUP_') ? ('Mobile: ' + mobileParam) : passno;
                     document.getElementById('passName').textContent = nameParam.toUpperCase() || 'USER';
@@ -398,9 +420,26 @@
                     document.getElementById('passContainer').style.display = 'block';
                 }
 
+                // Try to load cached data first
+                var cachedData = null;
+                try {
+                    var rawCached = sessionStorage.getItem('epass_data_' + passno);
+                    if (rawCached) {
+                        cachedData = JSON.parse(rawCached);
+                    }
+                } catch (e) {
+                    console.warn('Error reading from sessionStorage:', e);
+                }
+
+                if (cachedData) {
+                    renderPassData(cachedData);
+                }
+
                 // Offline mode: show fallback immediately (backend was unreachable)
                 if (isOffline || passno.startsWith('LOOKUP_')) {
-                    setFallback();
+                    if (!cachedData) {
+                        setFallback();
+                    }
                     return;
                 }
 
@@ -414,34 +453,22 @@
                     if (!response.ok) throw new Error('Pass not found');
                     const data = await response.json();
 
-                    document.getElementById('blink').textContent    = data.passno;
-                    document.getElementById('passName').textContent  = data.name;
-                    // Set photo with fallback for CORS/referrer blocked images
-                    var photoEl = document.getElementById('passPhoto');
-                    photoEl.onerror = function() {
-                        this.onerror = null;
-                        this.src = 'images/pawan.jpg';
-                    };
-                    photoEl.src = (data.photoUrl && data.photoUrl.trim() !== '') ? data.photoUrl : 'images/pawan.jpg';
-                    photoEl.referrerPolicy = 'no-referrer';
-                    const fromDate = new Date(data.validFrom).toLocaleDateString('en-GB');
-                    const toDate   = new Date(data.validTo).toLocaleDateString('en-GB');
-                    document.getElementById('passValidity').textContent =
-                        'Valid from ' + fromDate + ' to ' + toDate;
-                    renderQR(data.passno, data.qrCodeUrl);
+                    // Render fresh data and update cache
+                    renderPassData(data);
+                    try {
+                        sessionStorage.setItem('epass_data_' + data.passno, JSON.stringify(data));
+                    } catch (e) {}
 
                     // Dynamically update URL and passno variable if edited passno differs from URL parameter
                     if (passno !== data.passno) {
                         window.history.replaceState({}, '', '?passno=' + data.passno);
                     }
 
-                    // Show pass and hide loading
-                    document.getElementById('passLoading').style.display = 'none';
-                    document.getElementById('passContainer').style.display = 'block';
-
                 } catch (err) {
                     console.warn('API not available, using fallback:', err.message);
-                    setFallback();
+                    if (!cachedData) {
+                        setFallback();
+                    }
                 }
             })();
         </script>
