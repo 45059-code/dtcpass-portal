@@ -1,24 +1,22 @@
-/**
- * cron.js  –  DTC e-Bus Pass Backend Keep-Alive Cron
- * --------------------------------------------------
- * Schedule : Every 14 minutes, 24/7 (prevents Render free-tier sleep)
- * Cron expr: */14 * * * *
- *
- *  Why 14 min? Render free-tier spins down after 15 min of inactivity.
- *  Pinging every 14 min keeps the server warm at all times.
- *
- *  Field reference:
- *   ┌──────────── minute  (0-59)   → */14 = every 14 min
- *   │   ┌──────── hour    (0-23)   → * = all hours
- *   │   │   ┌────── day of month  → * = every day
- *   │   │   │   ┌──── month       → * = every month
- *   │   │   │   │   ┌── day of week → * = every day
- *   │   │   │   │   │
- *  */14  *   *   *   *
- *
- * Usage:
- *   node cron.js
- */
+// cron.js  –  DTC e-Bus Pass Backend Keep-Alive Cron
+// --------------------------------------------------
+// Schedule : Every 14 minutes, 24/7 (prevents Render free-tier sleep)
+// Cron expr: */14 * * * *
+//
+//  Why 14 min? Render free-tier spins down after 15 min of inactivity.
+//  Pinging every 14 min keeps the server warm at all times.
+//
+//  Field reference:
+//   ┌──────────── minute  (0-59)   → */14 = every 14 min
+//   │   ┌──────── hour    (0-23)   → * = all hours
+//   │   │   ┌────── day of month  → * = every day
+//   │   │   │   ┌──── month       → * = every month
+//   │   │   │   │   ┌── day of week → * = every day
+//   │   │   │   │   │
+//  */14  *   *   *   *
+//
+// Usage:
+//   node cron.js
 
 require('dotenv').config();
 const cron  = require('node-cron');
