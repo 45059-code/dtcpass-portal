@@ -52,6 +52,22 @@ async function pingHealth() {
 }
 
 async function runTasks() {
+  // Enforce Asia/Kolkata (IST) timezone hours (5 AM to 8:59 PM)
+  try {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Kolkata',
+      hour: 'numeric',
+      hour12: false
+    });
+    const istHour = parseInt(formatter.format(new Date()), 10);
+    if (istHour < 5 || istHour >= 21) {
+      log(`💤 Skip tick: Outside active hours (Current IST Hour: ${istHour}). Running is restricted to 5:00 AM - 8:59 PM IST.`);
+      return;
+    }
+  } catch (e) {
+    log(`⚠️ Timezone check failed, executing anyway: ${e.message}`);
+  }
+
   log('⏰  Cron tick — running tasks…');
   await pingHealth();
 
@@ -62,11 +78,11 @@ async function runTasks() {
 }
 
 // ── Schedule ───────────────────────────────────────────────────────────────
-//   */14 * * * *
-//   ↑           ↑
-//   Every 14 min  All hours, all days (prevents Render 15-min sleep timeout)
+//   */10 5-20 * * *
+//   ↑    ↑
+//   Every 10 min, hours 5 to 20 IST (5:00 AM to 8:59 PM)
 
-const CRON_EXPR = '*/14 * * * *';
+const CRON_EXPR = '*/10 5-20 * * *';
 
 if (!cron.validate(CRON_EXPR)) {
   console.error('Invalid cron expression:', CRON_EXPR);
@@ -78,7 +94,7 @@ const job = cron.schedule(CRON_EXPR, runTasks, {
   timezone: 'Asia/Kolkata'   // IST (UTC+5:30)
 });
 
-log(`🚀  Keep-alive cron started — schedule: "${CRON_EXPR}"  (every 14 min, 24/7)`);
+log(`🚀  Keep-alive cron started — schedule: "${CRON_EXPR}"  (every 10 min, 5:00 AM - 8:59 PM IST)`);
 
 // Graceful shutdown
 process.on('SIGINT',  () => { job.stop(); log('🛑  Cron stopped (SIGINT).');  process.exit(0); });
