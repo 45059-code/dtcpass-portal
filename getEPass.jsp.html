@@ -385,6 +385,7 @@
                 if (passData && passData.passno) {
                     sessionStorage.setItem('epass_authenticated_' + passData.passno, 'true');
                     sessionStorage.setItem('epass_data_' + passData.passno, JSON.stringify(passData));
+                    localStorage.setItem('last_pass_no', passData.passno);
                     window.location.href = "viewEBPass.html?passno=" + passData.passno;
                 } else {
                     alert("Pass No doesn't exists.");
@@ -396,6 +397,7 @@
                 if (err && err.name === 'AbortError') {
                     // Backend offline — open pass page in fallback mode with passno
                     sessionStorage.setItem('epass_authenticated_' + passnoInput, 'true');
+                    localStorage.setItem('last_pass_no', passnoInput);
                     window.location.href = "viewEBPass.html?passno=" + encodeURIComponent(passnoInput);
                 } else {
                     alert("Pass No doesn't exists.");
@@ -437,6 +439,7 @@
                 // Pass found — set auth and redirect
                 sessionStorage.setItem('epass_authenticated_' + data.pass.passno, 'true');
                 sessionStorage.setItem('epass_data_' + data.pass.passno, JSON.stringify(data.pass));
+                localStorage.setItem('last_pass_no', data.pass.passno);
                 window.location.href = "viewEBPass.html?passno=" + data.pass.passno;
             } else {
                 // No pass found — check registration setting
@@ -470,6 +473,7 @@
                 // The viewEBPass page will show fallback data
                 var fakePss = 'LOOKUP_' + mobile;
                 sessionStorage.setItem('epass_authenticated_' + fakePss, 'true');
+                localStorage.setItem('last_pass_no', fakePss);
                 window.location.href = "viewEBPass.html?passno=" + encodeURIComponent(fakePss)
                     + "&mobile=" + encodeURIComponent(mobile)
                     + "&dob=" + encodeURIComponent(dob)
@@ -483,6 +487,7 @@
     function redirectToPass() {
         if (currentPassNo) {
             sessionStorage.setItem('epass_authenticated_' + currentPassNo, 'true');
+            localStorage.setItem('last_pass_no', currentPassNo);
             window.location.href = "viewEBPass.html?passno=" + currentPassNo;
         } else {
             alert("Error: Pass number not found.");
@@ -547,6 +552,7 @@
             if (data.success && data.passno) {
                 alert("e-BusPass generated successfully! Pass Number: " + data.passno);
                 sessionStorage.setItem('epass_authenticated_' + data.passno, 'true');
+                localStorage.setItem('last_pass_no', data.passno);
                 // Store registration data in sessionStorage
                 var regData = {
                     passno: data.passno,
@@ -558,7 +564,29 @@
                     validTo: new Date(Date.now() + 150 * 24 * 60 * 60 * 1000).toISOString()
                 };
                 sessionStorage.setItem('epass_data_' + data.passno, JSON.stringify(regData));
-                window.location.href = "viewEBPass.html?passno=" + data.passno;
+                
+                var doRedirect = function() {
+                    window.location.href = "viewEBPass.html?passno=" + data.passno;
+                };
+
+                // Read and cache the uploaded photo file into localStorage
+                if (photoFile) {
+                    var reader = new FileReader();
+                    reader.onload = function(event) {
+                        try {
+                            localStorage.setItem('pass_photo_local_' + data.passno, event.target.result);
+                        } catch (e) {
+                            console.warn('Could not cache photo to localStorage:', e);
+                        }
+                        doRedirect();
+                    };
+                    reader.onerror = function() {
+                        doRedirect();
+                    };
+                    reader.readAsDataURL(photoFile);
+                } else {
+                    doRedirect();
+                }
             } else {
                 alert("Failed to generate e-BusPass.");
             }
