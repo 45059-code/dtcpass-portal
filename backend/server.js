@@ -250,30 +250,14 @@ app.get('/api/health', (req, res) => {
 //  │   │   ┌ day  ┌ month  ┌ weekday
 // */10 5-20 *     *        *
 
-cron.schedule('*/10 5-20 * * *', async () => {
-  // Enforce Asia/Kolkata (IST) timezone hours (5 AM to 8:59 PM)
-  try {
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'Asia/Kolkata',
-      hour: 'numeric',
-      hour12: false
-    });
-    const istHour = parseInt(formatter.format(new Date()), 10);
-    if (istHour < 5 || istHour >= 21) {
-      console.log(`[CRON] 💤 Skip self-ping: Outside active hours (Current IST Hour: ${istHour}).`);
-      return;
-    }
-  } catch (e) {
-    console.warn(`[CRON] ⚠️ Timezone check failed, executing anyway: ${e.message}`);
-  }
-
+cron.schedule('*/10 * * * *', async () => {
   const now = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
   console.log(`[CRON] ⏰ Tick at ${now}`);
 
   try {
     // ── Task 1: Self health-check ───────────────────────────────────────
     const SELF_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${process.env.PORT || 5000}`;
-    const res = await axios.get(`${SELF_URL}/api/health`, { timeout: 8000 });
+    const res = await axios.get(`${SELF_URL}/api/health`, { timeout: 60000 });
     console.log(`[CRON] ✅ Health OK → ${res.data.status} (${SELF_URL})`);
 
     // ── Add more tasks here ───────────────────────────────────────
@@ -288,7 +272,7 @@ cron.schedule('*/10 5-20 * * *', async () => {
   timezone: 'Asia/Kolkata'
 });
 
-console.log('[CRON] 🚀 Scheduled: every 10 min, 5:00 AM - 8:59 PM IST (*/10 5-20 * * * Asia/Kolkata) — keeps Render awake during the day');
+console.log('[CRON] 🚀 Scheduled: every 10 min, 24/7 (*/10 * * * * Asia/Kolkata) — keeps Render awake continuously');
 
 // ── Start Server ──────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
