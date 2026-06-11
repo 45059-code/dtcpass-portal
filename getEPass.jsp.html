@@ -639,21 +639,47 @@
 	// Clear pass sessions only on fresh initial page load (not bfcache restores).
 	// IMPORTANT: Do NOT clear if we just set an epass_authenticated_ key (i.e., navigating to viewEBPass).
 	window.addEventListener('pageshow', function(e) {
-		// e.persisted = true means the page came from browser back/forward cache.
-		// In that case, we do NOT clear — the user already auth'd and shouldn't be kicked out.
-		if (e.persisted) return;
-		// Only clear keys that are NOT epass_authenticated_ (those belong to viewEBPass auth)
+		// Unconditionally clear e-pass authentication and session keys to prevent automatic redirects on refresh or history navigation
 		var keysToRemove = [];
 		for (var i = 0; i < sessionStorage.length; i++) {
 			var k = sessionStorage.key(i);
-			// Preserve epass_authenticated_ and pass_session_ keys for a few seconds
-			// so that the redirect to viewEBPass can read them
-			if (!k || k.startsWith('epass_authenticated_') || k.startsWith('pass_session_') || k.startsWith('epass_scan_mode_')) {
-				continue;
+			if (k && (k.startsWith('epass_authenticated_') || k.startsWith('pass_session_') || k.startsWith('epass_scan_mode_') || k.startsWith('epass_data_'))) {
+				keysToRemove.push(k);
 			}
-			keysToRemove.push(k);
 		}
-		keysToRemove.forEach(function(k) { sessionStorage.removeItem(k); });
+		keysToRemove.forEach(function(k) {
+			sessionStorage.removeItem(k);
+		});
+
+		// Reset all inputs in the form
+		var form = document.getElementById('formSubmission');
+		if (form) {
+			form.reset();
+		}
+		
+		// Explicitly empty important input values
+		['passno', 'mobile', 'dob', 'typeCaptcha'].forEach(function(id) {
+			var el = document.getElementById(id);
+			if (el) el.value = '';
+		});
+
+		// Hide any feedback/success cards
+		['existingUserDiv', 'newUserDiv', 'otpbtndiv'].forEach(function(id) {
+			var el = document.getElementById(id);
+			if (el) el.style.display = 'none';
+		});
+
+		// Ensure primary action button is visible
+		var btnOtp = document.getElementById('btnOtp');
+		if (btnOtp) btnOtp.style.display = 'block';
+
+		var btnVerifyCaptcha = document.getElementById('btnVerifyCaptcha');
+		if (btnVerifyCaptcha) {
+			btnVerifyCaptcha.disabled = false;
+			btnVerifyCaptcha.textContent = 'Verify';
+		}
+
+		refreshCaptcha();
 	});
 	</script>
 </html>
