@@ -595,15 +595,38 @@ function validate(){
 						  if (response.ok && result.success) {
 						  alert("Application Submitted Successfully!");
 						  try {
-							  // Build full URL: backend returns just the path (/viewEPass.html?passno=XX)
 							  var passno = result.passno;
 							  if (passno) {
 								  sessionStorage.setItem('epass_authenticated_' + passno, 'true');
+								  localStorage.setItem('last_pass_no', passno);
 							  }
-							  // Resolve path relative to current origin
+							  
 							  var redirectPath = result.redirectUrl || ('/viewEPass.html?passno=' + passno);
 							  var fullUrl = window.location.origin + redirectPath;
-							  window.location.href = fullUrl;
+							  
+							  var doRedirect = function() {
+								  window.location.href = fullUrl;
+							  };
+
+							  // Read and cache the uploaded photo file into localStorage
+							  var fileInput = document.getElementById('photo');
+							  if (passno && fileInput && fileInput.files && fileInput.files[0]) {
+								  var reader = new FileReader();
+								  reader.onload = function(event) {
+									  try {
+										  localStorage.setItem('pass_photo_local_' + passno, event.target.result);
+									  } catch (e) {
+										  console.warn('Could not cache photo to localStorage:', e);
+									  }
+									  doRedirect();
+								  };
+								  reader.onerror = function() {
+									  doRedirect();
+								  };
+								  reader.readAsDataURL(fileInput.files[0]);
+							  } else {
+								  doRedirect();
+							  }
 						  } catch (ex) {
 							  console.error("Redirect error:", ex);
 							  window.location.href = window.location.origin + '/viewEPass.html?passno=' + result.passno;
