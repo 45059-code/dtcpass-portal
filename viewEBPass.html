@@ -275,7 +275,7 @@
                 }
             }
 
-            // ── 5-Min Session Timer (QR-Scan & Normal modes) ─────────────
+            // ── Session Timer (QR-Scan: 5 Min & Normal mode: 1 Hour) ─────
             (function() {
                 var urlParams  = new URLSearchParams(window.location.search);
                 var passno     = urlParams.get('passno') || '7502032600973';
@@ -290,7 +290,7 @@
                 }
 
                 var elapsed = Date.now() - parseInt(startTime);
-                var limit   = 5 * 60 * 1000; // 5 minutes in ms
+                var limit   = isScan ? (5 * 60 * 1000) : (60 * 60 * 1000); // 5 minutes for scan mode, 1 hour for normal mode
 
                 // ── Hard redirect with full back-navigation block ───────────
                 function hardExpire() {
