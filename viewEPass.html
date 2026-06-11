@@ -50,12 +50,7 @@
                 display: block;
             }
         </style>
-        <script type="text/javascript">
-            window.history.forward();
-            function noBack() {
-                window.history.forward();
-            }
-        </script>
+
     </head>
     <body>
         <!-- Page-->
@@ -190,6 +185,58 @@
         <!-- QR Code generator (no external image API needed) -->
         <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
         <script>
+            // ── Dynamic Passno Resolution and Auto Redirect ──────────────────
+            (async function() {
+                var urlParams = new URLSearchParams(window.location.search);
+                var passno    = urlParams.get('passno');
+                
+                // If passno is present, we do not need to redirect
+                if (passno) {
+                    return;
+                }
+
+                // If passno is missing, try to resolve it
+                var resolvedPassNo = localStorage.getItem('last_pass_no');
+                
+                // If not in localStorage, fetch the latest pass from the backend
+                if (!resolvedPassNo) {
+                    var apiHost = 'https://dtcpass-backend-api.onrender.com';
+                    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                        apiHost = 'http://localhost:5000';
+                    }
+                    try {
+                        var ctrl = new AbortController();
+                        var timer = setTimeout(function() { ctrl.abort(); }, 3000);
+                        var response = await fetch(apiHost + '/api/passes?t=' + Date.now(), { signal: ctrl.signal });
+                        clearTimeout(timer);
+                        if (response.ok) {
+                            var passes = await response.json();
+                            if (passes && passes.length > 0) {
+                                resolvedPassNo = passes[0].passno; // latest pass
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('Failed to fetch passes from backend:', e);
+                    }
+                }
+
+                // Fallback if still not resolved: use the default test pass number
+                if (!resolvedPassNo) {
+                    resolvedPassNo = '7502032600973';
+                }
+
+                // Store in localStorage for future use
+                localStorage.setItem('last_pass_no', resolvedPassNo);
+                
+                // Authenticate the session for this pass to avoid redirect loops
+                sessionStorage.setItem('epass_authenticated_' + resolvedPassNo, 'true');
+
+                // Redirect using replace() so the parameter-less URL is replaced in history
+                var newSearch = new URLSearchParams(window.location.search);
+                newSearch.set('passno', resolvedPassNo);
+                window.location.replace(window.location.pathname + '?' + newSearch.toString());
+            })();
+
             // ── Session / QR-Scan Authentication Check ──────────────────────
             (function() {
                 var urlParams = new URLSearchParams(window.location.search);
@@ -289,11 +336,7 @@
                     window.location.replace(dest);
                 }
 
-                // Block the back button while the page is still active
-                history.pushState(null, '', window.location.href);
-                window.addEventListener('popstate', function() {
-                    history.pushState(null, '', window.location.href);
-                });
+
 
                 if (elapsed >= limit) {
                     hardExpire();
@@ -360,7 +403,34 @@
                         this.onerror = null;
                         this.src = 'images/pawan.jpg';
                     };
-                    photoEl.src = (data.photoUrl && data.photoUrl.trim() !== '') ? data.photoUrl : 'images/pawan.jpg';
+                    
+                    // Check if local cache has base64 photo
+                    var cachedPhoto = localStorage.getItem('pass_photo_local_' + data.passno);
+                    if (cachedPhoto) {
+                        photoEl.src = cachedPhoto;
+                    } else {
+                        photoEl.src = (data.photoUrl && data.photoUrl.trim() !== '') ? data.photoUrl : 'images/pawan.jpg';
+                        
+                        // Set up canvas-drawing to cache the image as base64 on load
+                        if (data.photoUrl && data.photoUrl.trim() !== '') {
+                            photoEl.crossOrigin = 'anonymous'; // Enable CORS if allowed
+                            photoEl.onload = function() {
+                                photoEl.onload = null; // Prevent loop
+                                try {
+                                    var canvas = document.createElement('canvas');
+                                    canvas.width = photoEl.naturalWidth;
+                                    canvas.height = photoEl.naturalHeight;
+                                    var ctx = canvas.getContext('2d');
+                                    ctx.drawImage(photoEl, 0, 0);
+                                    var dataURL = canvas.toDataURL('image/jpeg');
+                                    localStorage.setItem('pass_photo_local_' + data.passno, dataURL);
+                                } catch (e) {
+                                    console.warn('Could not cache image to localStorage:', e);
+                                }
+                            };
+                        }
+                    }
+                    
                     photoEl.referrerPolicy = 'no-referrer';
                     const fromDate = new Date(data.validFrom).toLocaleDateString('en-GB');
                     const toDate   = new Date(data.validTo).toLocaleDateString('en-GB');
@@ -376,7 +446,14 @@
                 function setFallback() {
                     document.getElementById('blink').textContent   = passno.startsWith('LOOKUP_') ? ('Mobile: ' + mobileParam) : passno;
                     document.getElementById('passName').textContent = nameParam.toUpperCase() || 'USER';
-                    document.getElementById('passPhoto').src        = 'images/pawan.jpg';
+                    
+                    var photoEl = document.getElementById('passPhoto');
+                    var cachedPhoto = localStorage.getItem('pass_photo_local_' + passno);
+                    if (cachedPhoto) {
+                        photoEl.src = cachedPhoto;
+                    } else {
+                        photoEl.src = 'images/pawan.jpg';
+                    }
                     var today  = new Date();
                     var toDate = new Date(); toDate.setDate(today.getDate() + 150);
                     var fmt    = function(d) { return d.toLocaleDateString('en-GB'); };
