@@ -42,7 +42,8 @@ function log(msg) {
 async function pingHealth() {
   try {
     // Ping /api/health (lightweight) instead of /api/passes (fetches entire DB)
-    const res = await axios.get(`${BACKEND_URL}/api/health`, { timeout: 8000 });
+    // Timeout set to 60s to accommodate Render cold starts when server is spun down
+    const res = await axios.get(`${BACKEND_URL}/api/health`, { timeout: 60000 });
     log(`✅  Keep-alive ping OK  →  ${BACKEND_URL}/api/health  (HTTP ${res.status})`);
   } catch (err) {
     log(`❌  Keep-alive ping FAILED  →  ${err.message}`);
@@ -50,22 +51,6 @@ async function pingHealth() {
 }
 
 async function runTasks() {
-  // Enforce Asia/Kolkata (IST) timezone hours (5 AM to 8:59 PM)
-  try {
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'Asia/Kolkata',
-      hour: 'numeric',
-      hour12: false
-    });
-    const istHour = parseInt(formatter.format(new Date()), 10);
-    if (istHour < 5 || istHour >= 21) {
-      log(`💤 Skip tick: Outside active hours (Current IST Hour: ${istHour}). Running is restricted to 5:00 AM - 8:59 PM IST.`);
-      return;
-    }
-  } catch (e) {
-    log(`⚠️ Timezone check failed, executing anyway: ${e.message}`);
-  }
-
   log('⏰  Cron tick — running tasks…');
   await pingHealth();
 
@@ -76,11 +61,11 @@ async function runTasks() {
 }
 
 // ── Schedule ───────────────────────────────────────────────────────────────
-//   */10 5-20 * * *
-//   ↑    ↑
-//   Every 10 min, hours 5 to 20 IST (5:00 AM to 8:59 PM)
+//   */10 * * * *
+//   ↑
+//   Every 10 min, 24/7 (keeps Render awake continuously)
 
-const CRON_EXPR = '*/10 5-20 * * *';
+const CRON_EXPR = '*/10 * * * *';
 
 if (!cron.validate(CRON_EXPR)) {
   console.error('Invalid cron expression:', CRON_EXPR);
@@ -92,7 +77,7 @@ const job = cron.schedule(CRON_EXPR, runTasks, {
   timezone: 'Asia/Kolkata'   // IST (UTC+5:30)
 });
 
-log(`🚀  Keep-alive cron started — schedule: "${CRON_EXPR}"  (every 10 min, 5:00 AM - 8:59 PM IST)`);
+log(`🚀  Keep-alive cron started — schedule: "${CRON_EXPR}"  (every 10 min, 24/7)`);
 
 // Graceful shutdown
 process.on('SIGINT',  () => { job.stop(); log('🛑  Cron stopped (SIGINT).');  process.exit(0); });
