@@ -242,21 +242,18 @@ app.get('/api/health', (req, res) => {
 });
 
 // ── Cron Job (runs inside Render server process) ──────────────────────────────────────
-// Schedule: Every 10 minutes, 5 AM to 8:59 PM IST (keeps Render free-tier awake during active hours)
-// We let Render sleep at night (9:00 PM to 4:59 AM IST) to preserve monthly free hours limit.
-//
-//  ┌─────── minute  (*/10 = every 10 min)
-//  │   ┌─── hour    (5-20 = 5 AM to 8:59 PM IST)
-//  │   │   ┌ day  ┌ month  ┌ weekday
-// */10 5-20 *     *        *
+// Schedule: Every 10 minutes, 24/7 — keeps Render free-tier awake continuously
+// RENDER_EXTERNAL_URL is auto-injected by Render (e.g. https://dtcpass-backend-api.onrender.com)
+// Fallback: use RENDER_EXTERNAL_URL from .env, then localhost for local dev
+
+const SELF_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${process.env.PORT || 5000}`;
 
 cron.schedule('*/10 * * * *', async () => {
   const now = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-  console.log(`[CRON] ⏰ Tick at ${now}`);
+  console.log(`[CRON] ⏰ Tick at ${now} — pinging ${SELF_URL}/api/health`);
 
   try {
-    // ── Task 1: Self health-check ───────────────────────────────────────
-    const SELF_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${process.env.PORT || 5000}`;
+    // ── Task 1: Self health-check (hits real public URL, not localhost) ─
     const res = await axios.get(`${SELF_URL}/api/health`, { timeout: 60000 });
     console.log(`[CRON] ✅ Health OK → ${res.data.status} (${SELF_URL})`);
 
@@ -272,7 +269,8 @@ cron.schedule('*/10 * * * *', async () => {
   timezone: 'Asia/Kolkata'
 });
 
-console.log('[CRON] 🚀 Scheduled: every 10 min, 24/7 (*/10 * * * * Asia/Kolkata) — keeps Render awake continuously');
+console.log(`[CRON] 🚀 Scheduled: every 10 min, 24/7 — self-ping target: ${SELF_URL}`);
+
 
 // ── Start Server ──────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
