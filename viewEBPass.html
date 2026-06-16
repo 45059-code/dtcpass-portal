@@ -497,7 +497,7 @@
                     document.getElementById('passContainer').style.display = 'block';
                 }
 
-                // Try to load cached data first
+                // Try to load cached data first (sessionStorage = current tab, localStorage = persistent)
                 var cachedData = null;
                 try {
                     var rawCached = sessionStorage.getItem('epass_data_' + passno);
@@ -506,6 +506,18 @@
                     }
                 } catch (e) {
                     console.warn('Error reading from sessionStorage:', e);
+                }
+
+                // Also check localStorage persistent cache (survives tab/browser restart)
+                if (!cachedData) {
+                    try {
+                        var rawPersistent = localStorage.getItem('epass_persistent_' + passno);
+                        if (rawPersistent) {
+                            cachedData = JSON.parse(rawPersistent);
+                        }
+                    } catch (e) {
+                        console.warn('Error reading from localStorage:', e);
+                    }
                 }
 
                 if (cachedData) {
@@ -520,9 +532,11 @@
                     return;
                 }
 
+
                 try {
-                    const ctrl     = new AbortController();
-                    const timer    = setTimeout(function() { ctrl.abort(); }, 5000); // 5s timeout
+                    const ctrl  = new AbortController();
+                    // 15s timeout — backend is always awake via cron; 15s handles brief network delays
+                    const timer = setTimeout(function() { ctrl.abort(); }, 15000);
                     const response = await fetch(apiHost + '/api/passes/' + passno + '?t=' + new Date().getTime(),
                                                  { signal: ctrl.signal });
                     clearTimeout(timer);
@@ -530,10 +544,12 @@
                     if (!response.ok) throw new Error('Pass not found');
                     const data = await response.json();
 
-                    // Render fresh data and update cache
+                    // Render fresh data and cache in BOTH sessionStorage AND localStorage
                     renderPassData(data);
                     try {
                         sessionStorage.setItem('epass_data_' + data.passno, JSON.stringify(data));
+                        // localStorage cache survives browser restarts — real user's own pass
+                        localStorage.setItem('epass_persistent_' + data.passno, JSON.stringify(data));
                     } catch (e) {}
 
                     // Dynamically update URL and passno variable if edited passno differs from URL parameter
@@ -543,7 +559,28 @@
 
                 } catch (err) {
                     console.warn('API not available, using fallback:', err.message);
-                    if (!cachedData) {
+
+                    // Try localStorage persistent cache first (real user data survives restarts)
+                    var persistentData = null;
+                    try {
+                        var rawPersistent = localStorage.getItem('epass_persistent_' + passno);
+                        if (rawPersistent) persistentData = JSON.parse(rawPersistent);
+                    } catch (e) {}
+
+                    if (persistentData) {
+                        // Show real user data with an offline warning banner
+                        renderPassData(persistentData);
+                        var offlineBanner = document.createElement('div');
+                        offlineBanner.style.cssText = [
+                            'position:fixed','top:0','left:0','width:100%',
+                            'background:#e67e22','color:#fff','text-align:center',
+                            'padding:8px 15px','font-size:13px','font-weight:700',
+                            'z-index:9999','font-family:sans-serif'
+                        ].join(';');
+                        offlineBanner.innerHTML = '⚠️ Showing cached pass data (server offline). Reload to refresh.';
+                        document.body.insertBefore(offlineBanner, document.body.firstChild);
+                    } else if (!cachedData) {
+                        // Only show generic fallback if we have truly NO data at all
                         setFallback();
                     }
                 }
