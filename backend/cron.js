@@ -1,28 +1,34 @@
 // cron.js  –  DTC e-Bus Pass Backend Keep-Alive Cron
 // --------------------------------------------------
-// Schedule : Every 14 minutes, 24/7 (prevents Render free-tier sleep)
-// Cron expr: */14 * * * *
+// Run this SEPARATELY (e.g. on cron-job.org, Vercel CRON, Railway, etc.)
+// OR locally: node cron.js
 //
-//  Why 14 min? Render free-tier spins down after 15 min of inactivity.
-//  Pinging every 14 min keeps the server warm at all times.
+// Schedule : Every 10 minutes, 24/7 (prevents Render free-tier sleep)
+// Cron expr: */10 * * * *
+//
+// NOTE: The server.js already has a built-in cron that pings itself.
+//       This external cron.js is a BACKUP — it pings from OUTSIDE the
+//       server process, which is more reliable (hits the real HTTP layer).
 //
 //  Field reference:
-//   ┌──────────── minute  (0-59)   → */14 = every 14 min
+//   ┌──────────── minute  (0-59)   → */10 = every 10 min
 //   │   ┌──────── hour    (0-23)   → * = all hours
 //   │   │   ┌────── day of month  → * = every day
 //   │   │   │   ┌──── month       → * = every month
 //   │   │   │   │   ┌── day of week → * = every day
 //   │   │   │   │   │
-//  */14  *   *   *   *
-//
-// Usage:
-//   node cron.js
+//  */10  *   *   *   *
 
 require('dotenv').config();
 const cron  = require('node-cron');
 const axios = require('axios');
 
-const BACKEND_URL = process.env.BACKEND_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${process.env.PORT || 5000}`;
+// ── Backend URL ──────────────────────────────────────────────────────────────
+// RENDER_EXTERNAL_URL is auto-set by Render in production.
+// Fallback to the known public Render URL, then localhost for local dev.
+const BACKEND_URL = process.env.RENDER_EXTERNAL_URL
+                 || process.env.BACKEND_URL
+                 || 'https://dtcpass-backend-api.onrender.com';
 
 // ── Helper ────────────────────────────────────────────────────────────────────
 function timestamp() {
@@ -41,12 +47,19 @@ function log(msg) {
 // ── Tasks to run every tick ───────────────────────────────────────────────
 async function pingHealth() {
   try {
-    // Ping /api/health (lightweight) instead of /api/passes (fetches entire DB)
-    // Timeout set to 60s to accommodate Render cold starts when server is spun down
+    // Ping /api/health (lightweight) — 60s timeout to handle Render cold starts
     const res = await axios.get(`${BACKEND_URL}/api/health`, { timeout: 60000 });
     log(`✅  Keep-alive ping OK  →  ${BACKEND_URL}/api/health  (HTTP ${res.status})`);
+    if (res.data && res.data.status) {
+      log(`    Server status: ${res.data.status}  |  Time: ${res.data.time}`);
+    }
   } catch (err) {
     log(`❌  Keep-alive ping FAILED  →  ${err.message}`);
+    if (err.code === 'ECONNREFUSED') {
+      log(`    ℹ️  Connection refused — is the server running? URL: ${BACKEND_URL}`);
+    } else if (err.code === 'ENOTFOUND') {
+      log(`    ℹ️  DNS lookup failed — check BACKEND_URL: ${BACKEND_URL}`);
+    }
   }
 }
 
@@ -61,10 +74,6 @@ async function runTasks() {
 }
 
 // ── Schedule ───────────────────────────────────────────────────────────────
-//   */10 * * * *
-//   ↑
-//   Every 10 min, 24/7 (keeps Render awake continuously)
-
 const CRON_EXPR = '*/10 * * * *';
 
 if (!cron.validate(CRON_EXPR)) {
@@ -78,6 +87,11 @@ const job = cron.schedule(CRON_EXPR, runTasks, {
 });
 
 log(`🚀  Keep-alive cron started — schedule: "${CRON_EXPR}"  (every 10 min, 24/7)`);
+log(`    Target URL: ${BACKEND_URL}/api/health`);
+
+// Run once immediately on startup to verify connectivity
+log('🔍  Running initial ping to verify backend is reachable...');
+pingHealth();
 
 // Graceful shutdown
 process.on('SIGINT',  () => { job.stop(); log('🛑  Cron stopped (SIGINT).');  process.exit(0); });
