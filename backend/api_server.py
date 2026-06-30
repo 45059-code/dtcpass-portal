@@ -230,10 +230,10 @@ class MockCollection:
         self.passes.append({
             '_id': ObjectId('6443c5b96912b7a4cf8a27d2'),
             'passno': '7502032600973',
-            'name': 'PAWAN KUMAR',
+            'name': 'DEMO PASS HOLDER',
             'mobile': '9999999999',
             'dob': '01/01/2000',
-            'photoUrl': 'images/pawan.jpg',
+            'photoUrl': 'images/DTC1.png',
             'qrCodeUrl': '',
             'validFrom': now,
             'validTo': now + timedelta(days=150),
@@ -546,7 +546,7 @@ class APIHandler(BaseHTTPRequestHandler):
                 return self._send_json(500, {'error': 'Database not connected'})
             doc = db_col.find_one({'passno': passno})
             if not doc and passno == '7502032600973':
-                # Fallback: Find the default Pawan Kumar record by its unique _id
+                # Fallback: Find the default demo record by its unique _id
                 doc = db_col.find_one({'_id': ObjectId('6443c5b96912b7a4cf8a27d2')})
             if not doc:
                 return self._send_json(404, {'error': 'Bus Pass not found.'})
