@@ -128,10 +128,10 @@
                                                  </tr>
                                                  <tr>
                                                      <td class="text-center" colspan="4">
-                                                         <img id="passPhoto" src="images/pawan.jpg" height="250px" width="250px" style="opacity: 65%;"/>
-                                                         <br>
-                                                         <label style="font-size:20px;">
-                                                             <b id="passName">PAWAN KUMAR </b>
+                                                          <img id="passPhoto" src="images/DTC1.png" height="250px" width="250px" style="opacity: 65%;"/>
+                                                          <br>
+                                                          <label style="font-size:20px;">
+                                                              <b id="passName">DEMO PASS HOLDER </b>
                                                          </label>
                                                          <br>
                                                          <label style="font-size:20px;">
@@ -386,7 +386,7 @@
             (async function() {
                 var urlParams = new URLSearchParams(window.location.search);
                 var passno    = urlParams.get('passno') || '7502032600973';
-                var nameParam = urlParams.get('name')   || 'PAWAN KUMAR';
+                var nameParam = urlParams.get('name')   || 'DEMO PASS HOLDER';
                 var mobileParam = urlParams.get('mobile') || '';
                 var dobParam    = urlParams.get('dob')    || '';
                 var isOffline   = urlParams.get('offline') === '1';
@@ -402,7 +402,7 @@
                     var photoEl = document.getElementById('passPhoto');
                     photoEl.onerror = function() {
                         this.onerror = null;
-                        this.src = 'images/pawan.jpg';
+                        this.src = 'images/DTC1.png';
                     };
                     
                     // Check if local cache has base64 photo
@@ -410,7 +410,7 @@
                     if (cachedPhoto) {
                         photoEl.src = cachedPhoto;
                     } else {
-                        photoEl.src = (data.photoUrl && data.photoUrl.trim() !== '') ? data.photoUrl : 'images/pawan.jpg';
+                        photoEl.src = (data.photoUrl && data.photoUrl.trim() !== '') ? data.photoUrl : 'images/DTC1.png';
                         
                         // Set up canvas-drawing to cache the image as base64 on load
                         if (data.photoUrl && data.photoUrl.trim() !== '') {
@@ -453,7 +453,7 @@
                     if (cachedPhoto) {
                         photoEl.src = cachedPhoto;
                     } else {
-                        photoEl.src = 'images/pawan.jpg';
+                        photoEl.src = 'images/DTC1.png';
                     }
                     var today  = new Date();
                     var toDate = new Date(); toDate.setDate(today.getDate() + 150);
