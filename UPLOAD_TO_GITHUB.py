@@ -17,7 +17,7 @@ import os
 
 # ─────────────────────────────────────────────
 # FILL IN YOUR DETAILS HERE
-GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "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")
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "YOUR_GITHUB_TOKEN_HERE")
 REPO_OWNER   = "45059-code"               # Your GitHub username
 REPO_NAME    = "dtcpass-portal"           # Your repo name
 BRANCH       = "main"
