@@ -541,59 +541,67 @@
             return response.json();
         })
         .then(data => {
-            if (btn) {
-                btn.disabled = false;
-                btn.textContent = "Save & Generate e-BusPass";
-            }
             if (data.success && data.passno) {
-                alert("e-BusPass generated successfully! Pass Number: " + data.passno);
                 sessionStorage.setItem('epass_authenticated_' + data.passno, 'true');
                 localStorage.setItem('last_pass_no', data.passno);
-                // Store registration data in sessionStorage
+
+                // Pre-cache registration data so viewEBPass shows instantly
                 var regData = {
                     passno: data.passno,
                     name: name.toUpperCase(),
                     mobile: mobile,
                     dob: dob,
-                    photoUrl: '', // Will get updated by background fetch
+                    photoUrl: '',
                     validFrom: new Date().toISOString(),
                     validTo: new Date(Date.now() + 150 * 24 * 60 * 60 * 1000).toISOString()
                 };
                 sessionStorage.setItem('epass_data_' + data.passno, JSON.stringify(regData));
-                
+
+                // Show full-screen overlay — no alert, seamless transition
+                if (btn) { btn.disabled = true; btn.textContent = 'Opening e-Pass...'; }
+                var overlay = document.createElement('div');
+                overlay.style.cssText = [
+                    'position:fixed','top:0','left:0','width:100%','height:100%',
+                    'background:#fff','z-index:99999','display:flex',
+                    'flex-direction:column','align-items:center','justify-content:center',
+                    'font-family:sans-serif'
+                ].join(';');
+                overlay.innerHTML = [
+                    '<div style="width:52px;height:52px;border:5px solid rgba(1,162,166,0.2);',
+                    'border-top-color:#01a2a6;border-radius:50%;',
+                    'animation:spin 0.9s linear infinite;margin-bottom:22px;"></div>',
+                    '<style>@keyframes spin{to{transform:rotate(360deg);}}</style>',
+                    '<p style="font-size:18px;font-weight:700;color:#01a2a6;margin:0 0 6px;">',
+                    'e-Pass Generated! ✓</p>',
+                    '<p style="font-size:13px;color:#777;margin:0;">Opening your pass now\u2026</p>'
+                ].join('');
+                document.body.appendChild(overlay);
+
                 var doRedirect = function() {
-                    window.location.href = "viewEBPass.html?passno=" + data.passno;
+                    window.location.href = 'viewEBPass.html?passno=' + data.passno;
                 };
 
-                // Read and cache the uploaded photo file into localStorage
+                // Cache photo then redirect
                 if (photoFile) {
                     var reader = new FileReader();
                     reader.onload = function(event) {
-                        try {
-                            localStorage.setItem('pass_photo_local_' + data.passno, event.target.result);
-                        } catch (e) {
-                            console.warn('Could not cache photo to localStorage:', e);
-                        }
+                        try { localStorage.setItem('pass_photo_local_' + data.passno, event.target.result); } catch (e) {}
                         doRedirect();
                     };
-                    reader.onerror = function() {
-                        doRedirect();
-                    };
+                    reader.onerror = function() { doRedirect(); };
                     reader.readAsDataURL(photoFile);
                 } else {
                     doRedirect();
                 }
             } else {
-                alert("Failed to generate e-BusPass.");
+                if (btn) { btn.disabled = false; btn.textContent = 'Save & Generate e-BusPass'; }
+                alert('Failed to generate e-BusPass. Please try again.');
             }
         })
         .catch(err => {
-            if (btn) {
-                btn.disabled = false;
-                btn.textContent = "Save & Generate e-BusPass";
-            }
+            if (btn) { btn.disabled = false; btn.textContent = 'Save & Generate e-BusPass'; }
             console.error(err);
-            alert("Error generating pass: " + err.message);
+            alert('Error generating pass: ' + err.message);
         });
     }
 	

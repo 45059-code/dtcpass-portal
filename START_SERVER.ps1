@@ -1,7 +1,7 @@
 # DTC e-Bus Pass - Server Launcher
 # Right-click this file and choose "Run with PowerShell"
 
-$ROOT  = "D:\dtcpass.delhi.gov.in"
+$ROOT  = $PSScriptRoot
 
 Write-Host ""
 Write-Host "=====================================================" -ForegroundColor Cyan

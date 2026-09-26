@@ -5,7 +5,8 @@ $TOKEN     = "github_pat_11BZDWARI0dtHNSBvV182G_zQsDFFkKcbP125KtVUatTq2lCSr8SQ1p
 $OWNER     = "45059-code"
 $REPO      = "dtcpass-portal"
 $BRANCH    = "main"
-$ROOT      = "D:\dtcpass.delhi.gov.in"
+$ROOT = $PSScriptRoot
+if (-not $ROOT) { $ROOT = "d:\dtcpass-portal-main\dtcpass-portal-main" }
 
 $FILES = @(
     @{ local = "$ROOT\backend\requirements.txt"; repo = "backend/requirements.txt" },
@@ -15,9 +16,11 @@ $FILES = @(
     @{ local = "$ROOT\.vercelignore";            repo = ".vercelignore"            },
     @{ local = "$ROOT\viewEBPass.html";           repo = "viewEBPass.html"           },
     @{ local = "$ROOT\viewEPass.html";            repo = "viewEPass.html"            },
+    @{ local = "$ROOT\viewEPass(1).html";         repo = "viewEPass(1).html"         },
     @{ local = "$ROOT\registeredUsers.html";      repo = "registeredUsers.html"      },
     @{ local = "$ROOT\getEPass.jsp.html";         repo = "getEPass.jsp.html"         },
-    @{ local = "$ROOT\apply.html";                repo = "apply.html"                }
+    @{ local = "$ROOT\apply.html";                repo = "apply.html"                },
+    @{ local = "$ROOT\START_SERVER.ps1";          repo = "START_SERVER.ps1"          }
 )
 
 $COMMIT_MSG = "fix: support custom profile QR codes and origin-based scanner bypass URL"

@@ -221,35 +221,149 @@ except ImportError:
         def __hash__(self):
             return hash(str(self))
 
+def doc_to_dict(doc) -> dict:
+    """Convert a MongoDB document to a JSON-serialisable dict."""
+    if doc is None:
+        return None
+    d = dict(doc)
+    # Convert ObjectId → string
+    if '_id' in d:
+        d['_id'] = str(d['_id'])
+    # Convert datetime → ISO string
+    for key in ('validFrom', 'validTo', 'createdAt', 'updatedAt'):
+        if key in d and isinstance(d[key], datetime):
+            d[key] = d[key].isoformat()
+    return d
+
+PASSES_DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'passes_db.json')
+CLOUD_API_URL  = 'https://dtcpass-backend-api.onrender.com'
+
 class MockCollection:
     def __init__(self):
         self.passes = []
         self.settings_store = {'registration': {'allow_registration': True}}
-        # Seed with a default pass for testing/demo
-        now = datetime.now(timezone.utc)
-        self.passes.append({
-            '_id': ObjectId('6443c5b96912b7a4cf8a27d2'),
-            'passno': '7502032600973',
-            'name': 'DEMO PASS HOLDER',
-            'mobile': '9999999999',
-            'dob': '01/01/2000',
-            'photoUrl': 'images/DTC1.png',
-            'qrCodeUrl': '',
-            'validFrom': now,
-            'validTo': now + timedelta(days=150),
-            'createdAt': now,
-            'updatedAt': now,
-        })
+        self.db_file = PASSES_DB_FILE
+        self._load_from_disk()
+
+        # Seed if empty
+        if not self.passes:
+            now = datetime.now(timezone.utc)
+            self.passes.append({
+                '_id': '6443c5b96912b7a4cf8a27d2',
+                'passno': '7502032600973',
+                'name': 'PAWAN KUMAR',
+                'mobile': '8010106194',
+                'dob': '09/05/2005',
+                'photoUrl': 'https://i.ibb.co/0pxWFxwL/34a72bd2efb4.jpg',
+                'qrCodeUrl': '',
+                'validFrom': '2026-05-19T00:00:00',
+                'validTo': '2026-10-18T00:00:00',
+                'createdAt': '2026-05-19T00:00:00',
+                'updatedAt': '2026-09-26T00:00:00',
+            })
+            self.save_to_disk()
+
+        # Sync cloud in background
+        import threading
+        threading.Thread(target=self.sync_with_cloud, daemon=True).start()
+
+    def _load_from_disk(self):
+        try:
+            if os.path.exists(self.db_file):
+                with open(self.db_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                if isinstance(data, dict):
+                    self.passes = data.get('passes', [])
+                    self.settings_store = data.get('settings', {'registration': {'allow_registration': True}})
+                elif isinstance(data, list):
+                    self.passes = data
+                print(f"[BOOT] Loaded {len(self.passes)} passes from {self.db_file}", flush=True)
+        except Exception as e:
+            print(f"[WARN] Failed to load {self.db_file}: {e}", flush=True)
+
+    def save_to_disk(self):
+        try:
+            with open(self.db_file, 'w', encoding='utf-8') as f:
+                json.dump({
+                    'passes': [doc_to_dict(p) for p in self.passes],
+                    'settings': self.settings_store
+                }, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"[WARN] Failed to save {self.db_file}: {e}", flush=True)
+
+    def sync_with_cloud(self):
+        if not HAS_REQUESTS:
+            return
+        try:
+            resp = req_lib.get(f"{CLOUD_API_URL}/api/passes", timeout=8)
+            if resp.status_code == 200:
+                cloud_passes = resp.json()
+                if isinstance(cloud_passes, list) and cloud_passes:
+                    existing_passnos = {p.get('passno') for p in self.passes if p.get('passno')}
+                    existing_ids = {str(p.get('_id')) for p in self.passes if p.get('_id')}
+                    updated = False
+                    for cp in cloud_passes:
+                        pno = cp.get('passno')
+                        cid = str(cp.get('_id'))
+                        if pno not in existing_passnos and cid not in existing_ids:
+                            self.passes.append(cp)
+                            existing_passnos.add(pno)
+                            existing_ids.add(cid)
+                            updated = True
+                    if updated:
+                        print(f"[INFO] Cloud sync: updated local database to {len(self.passes)} passes.", flush=True)
+                        self.save_to_disk()
+        except Exception as e:
+            print(f"[INFO] Cloud sync note: {e}", flush=True)
+
+    def fetch_pass_from_cloud(self, passno):
+        if not HAS_REQUESTS:
+            return None
+        try:
+            resp = req_lib.get(f"{CLOUD_API_URL}/api/passes/{passno}", timeout=6)
+            if resp.status_code == 200:
+                doc = resp.json()
+                if doc and doc.get('passno'):
+                    if not any(p.get('passno') == doc.get('passno') for p in self.passes):
+                        self.passes.append(doc)
+                        self.save_to_disk()
+                    return doc
+        except Exception:
+            pass
+        return None
+
+    def check_pass_from_cloud(self, mobile, dob):
+        if not HAS_REQUESTS:
+            return None
+        try:
+            import urllib.parse
+            q = urllib.parse.urlencode({'mobile': mobile, 'dob': dob})
+            resp = req_lib.get(f"{CLOUD_API_URL}/api/passes/check?{q}", timeout=6)
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get('exists') and data.get('pass'):
+                    doc = data['pass']
+                    if not any(p.get('passno') == doc.get('passno') for p in self.passes):
+                        self.passes.append(doc)
+                        self.save_to_disk()
+                    return doc
+        except Exception:
+            pass
+        return None
 
     def find(self, query=None):
-        results = self.passes
+        results = list(self.passes)
         class Cursor:
             def __init__(self, data):
                 self.data = data
             def sort(self, key, direction=1):
-                # Simple sort by createdAt DESC
                 if key == 'createdAt' and direction == -1:
-                    return sorted(self.data, key=lambda x: x.get('createdAt', datetime.min), reverse=True)
+                    def sort_key(x):
+                        val = x.get('createdAt')
+                        if isinstance(val, datetime):
+                            return val.isoformat()
+                        return str(val or '')
+                    return sorted(self.data, key=sort_key, reverse=True)
                 return self.data
             def __iter__(self):
                 return iter(self.data)
@@ -265,7 +379,7 @@ class MockCollection:
                     if str(p.get('_id')) != str(v):
                         match = False
                         break
-                elif p.get(k) != v:
+                elif str(p.get(k, '')).strip() != str(v).strip():
                     match = False
                     break
             if match:
@@ -274,25 +388,29 @@ class MockCollection:
 
     def insert_one(self, doc):
         if '_id' not in doc:
-            doc['_id'] = ObjectId()
+            doc['_id'] = str(ObjectId())
         self.passes.append(doc)
+        self.save_to_disk()
         return doc
 
     def update_one(self, query, update):
         if query.get('_id') == 'registration':
             if '$set' in update:
                 self.settings_store['registration'].update(update['$set'])
+                self.save_to_disk()
             return self.settings_store['registration']
         doc = self.find_one(query)
         if doc and '$set' in update:
             for k, v in update['$set'].items():
                 doc[k] = v
+            self.save_to_disk()
         return doc
 
     def find_one_and_delete(self, query):
         doc = self.find_one(query)
         if doc:
             self.passes.remove(doc)
+            self.save_to_disk()
             return doc
         return None
 
@@ -328,9 +446,9 @@ def connect_db_async():
             _load_registration_setting()  # ← now works because _real_db is set globally
         except Exception as e:
             print(f"[WARN] MongoDB connection failed: {e}", flush=True)
-            print("[INFO] Falling back to in-memory mock database.", flush=True)
+            print("[INFO] Falling back to local mock database with disk persistence.", flush=True)
     else:
-        print("[INFO] MONGODB_URI not set — using in-memory mock database.", flush=True)
+        print("[INFO] MONGODB_URI not set — using local mock database with disk persistence.", flush=True)
 
 import threading
 threading.Thread(target=connect_db_async, daemon=True).start()
@@ -341,35 +459,55 @@ def generate_passno():
     return '750' + str(random.randint(1000000000, 9999999999))
 
 
+def _compress_image(image_bytes: bytes, max_bytes: int = 1_400_000) -> bytes:
+    """Compress/resize image so it is under max_bytes. Returns JPEG bytes."""
+    try:
+        from PIL import Image as PILImage
+        import io
+        img = PILImage.open(io.BytesIO(image_bytes))
+        # Convert RGBA/P to RGB for JPEG compatibility
+        if img.mode not in ('RGB', 'L'):
+            img = img.convert('RGB')
+        quality = 85
+        while quality >= 30:
+            buf = io.BytesIO()
+            img.save(buf, format='JPEG', quality=quality, optimize=True)
+            compressed = buf.getvalue()
+            if len(compressed) <= max_bytes:
+                return compressed
+            quality -= 10
+        # If still too large, also halve dimensions
+        w, h = img.size
+        img = img.resize((w // 2, h // 2), PILImage.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format='JPEG', quality=50, optimize=True)
+        return buf.getvalue()
+    except Exception as ce:
+        print(f"[WARN] PIL compression failed ({ce}), returning original bytes", flush=True)
+        return image_bytes
+
+
 def upload_to_imgbb(image_bytes: bytes) -> str:
-    """Upload image bytes to ImgBB and return the public URL."""
-    if not HAS_REQUESTS:
-        raise RuntimeError("requests library not installed")
-    if not IMGBB_API_KEY or IMGBB_API_KEY == 'YOUR_IMGBB_API_KEY_HERE':
-        raise RuntimeError("ImgBB API key is missing in .env")
-    encoded = base64.b64encode(image_bytes).decode('utf-8')
-    resp = req_lib.post(
-        f"https://api.imgbb.com/1/upload?key={IMGBB_API_KEY}",
-        data={'image': encoded},
-        timeout=30
-    )
-    resp.raise_for_status()
-    return resp.json()['data']['url']
-
-
-def doc_to_dict(doc) -> dict:
-    """Convert a MongoDB document to a JSON-serialisable dict."""
-    if doc is None:
-        return None
-    d = dict(doc)
-    # Convert ObjectId → string
-    if '_id' in d:
-        d['_id'] = str(d['_id'])
-    # Convert datetime → ISO string
-    for key in ('validFrom', 'validTo', 'createdAt', 'updatedAt'):
-        if key in d and isinstance(d[key], datetime):
-            d[key] = d[key].isoformat()
-    return d
+    """Upload image bytes to ImgBB and return public URL, with data URI fallback."""
+    if not IMGBB_API_KEY or IMGBB_API_KEY == 'YOUR_IMGBB_API_KEY_HERE' or not HAS_REQUESTS:
+        return 'data:image/jpeg;base64,' + base64.b64encode(image_bytes).decode('utf-8')
+    try:
+        # Compress image to stay within ImgBB's 32 MB limit (safe at <1.5 MB raw)
+        compressed = _compress_image(image_bytes)
+        encoded = base64.b64encode(compressed).decode('utf-8')
+        resp = req_lib.post(
+            'https://api.imgbb.com/1/upload',
+            params={'key': IMGBB_API_KEY},
+            data={'image': encoded},
+            timeout=30
+        )
+        if not resp.ok:
+            print(f"[WARN] ImgBB returned HTTP {resp.status_code}: {resp.text[:200]}", flush=True)
+        resp.raise_for_status()
+        return resp.json()['data']['url']
+    except Exception as e:
+        print(f"[WARN] ImgBB upload failed ({e}), using inline data URI fallback", flush=True)
+        return 'data:image/jpeg;base64,' + base64.b64encode(image_bytes).decode('utf-8')
 
 
 def parse_multipart(handler):
@@ -523,6 +661,8 @@ class APIHandler(BaseHTTPRequestHandler):
         if path == '/api/passes':
             if db_col is None:
                 return self._send_json(500, {'error': 'Database not connected'})
+            if isinstance(db_col, MockCollection) and len(db_col.passes) <= 1:
+                db_col.sync_with_cloud()
             docs = list(db_col.find().sort('createdAt', -1))
             return self._send_json(200, [doc_to_dict(d) for d in docs])
 
@@ -535,6 +675,8 @@ class APIHandler(BaseHTTPRequestHandler):
             if db_col is None:
                 return self._send_json(500, {'error': 'Database not connected'})
             doc = db_col.find_one({'mobile': mobile, 'dob': dob})
+            if not doc and isinstance(db_col, MockCollection):
+                doc = db_col.check_pass_from_cloud(mobile, dob)
             if doc:
                 return self._send_json(200, {'exists': True, 'pass': doc_to_dict(doc)})
             return self._send_json(200, {'exists': False})
@@ -547,7 +689,9 @@ class APIHandler(BaseHTTPRequestHandler):
             doc = db_col.find_one({'passno': passno})
             if not doc and passno == '7502032600973':
                 # Fallback: Find the default demo record by its unique _id
-                doc = db_col.find_one({'_id': ObjectId('6443c5b96912b7a4cf8a27d2')})
+                doc = db_col.find_one({'_id': '6443c5b96912b7a4cf8a27d2'}) or db_col.find_one({'passno': '7502032600973'})
+            if not doc and isinstance(db_col, MockCollection):
+                doc = db_col.fetch_pass_from_cloud(passno)
             if not doc:
                 return self._send_json(404, {'error': 'Bus Pass not found.'})
             return self._send_json(200, doc_to_dict(doc))
@@ -702,8 +846,12 @@ class APIHandler(BaseHTTPRequestHandler):
                         dt = dt.replace(tzinfo=timezone.utc)
                     update['validTo'] = dt
 
-                db_col.update_one({'_id': ObjectId(pass_id)}, {'$set': update})
-                updated = db_col.find_one({'_id': ObjectId(pass_id)})
+                try:
+                    query_id = ObjectId(pass_id)
+                except Exception:
+                    query_id = pass_id
+                db_col.update_one({'_id': query_id}, {'$set': update})
+                updated = db_col.find_one({'_id': query_id})
                 print(f"[INFO] Pass successfully updated in database: {doc_to_dict(updated)}")
                 return self._send_json(200, {'success': True, 'pass': doc_to_dict(updated)})
 
@@ -722,7 +870,11 @@ class APIHandler(BaseHTTPRequestHandler):
             try:
                 if db_col is None:
                     return self._send_json(500, {'error': 'Database not connected'})
-                result = db_col.find_one_and_delete({'_id': ObjectId(pass_id)})
+                try:
+                    query_id = ObjectId(pass_id)
+                except Exception:
+                    query_id = pass_id
+                result = db_col.find_one_and_delete({'_id': query_id})
                 if not result:
                     return self._send_json(404, {'error': 'Pass not found.'})
                 return self._send_json(200, {'success': True, 'message': 'Pass deleted successfully.'})
@@ -736,8 +888,35 @@ class APIHandler(BaseHTTPRequestHandler):
         print(f"[{self.address_string()}] {fmt % args}")
 
 
+# ── Self keep-alive thread (prevents Render free-tier from sleeping) ────────────
+def _keep_alive_loop():
+    """
+    Pings /api/health on the production Render URL every 14 minutes so
+    Render's free-tier never idles.  Runs as a daemon thread; no output
+    is shown on the frontend — purely a background operation.
+    """
+    import time as _time
+    RENDER_URL = 'https://dtcpass-backend-api.onrender.com/api/health'
+    INTERVAL   = 14 * 60  # 14 minutes (Render sleeps after 15 min of inactivity)
+    _time.sleep(30)       # Wait 30 s after boot before first ping
+    while True:
+        try:
+            if HAS_REQUESTS:
+                r = req_lib.get(RENDER_URL, timeout=20)
+                print(f"[KEEPALIVE] Pinged {RENDER_URL} -> HTTP {r.status_code}", flush=True)
+        except Exception as _ke:
+            print(f"[KEEPALIVE] Ping failed: {_ke}", flush=True)
+        _time.sleep(INTERVAL)
+
+
 # ── Entry point ────────────────────────────────────────────────────────────────
 if __name__ == '__main__':
+    # Start self keep-alive background thread
+    import threading as _threading
+    _ka_thread = _threading.Thread(target=_keep_alive_loop, daemon=True, name='KeepAlive')
+    _ka_thread.start()
+    print("[INFO] Keep-alive thread started (14-min interval)", flush=True)
+
     try:
         print(f"[START] Binding HTTPServer to {HOST}:{PORT} ...", flush=True)
         server = HTTPServer((HOST, PORT), APIHandler)

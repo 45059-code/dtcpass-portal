@@ -244,9 +244,10 @@
                     }
                 }
 
-                // Fallback if still not resolved: use the default test pass number
+                // No pass found — send user to the lookup page instead of showing demo pass
                 if (!resolvedPassNo) {
-                    resolvedPassNo = '7502032600973';
+                    window.location.replace('getEPass.jsp.html');
+                    return;
                 }
 
                 // Store in localStorage for future use
@@ -264,13 +265,25 @@
             // ── Session / QR-Scan Authentication Check ──────────────────────
             (function() {
                 var urlParams = new URLSearchParams(window.location.search);
-                var passno    = urlParams.get('passno') || '7502032600973';
+                var passno    = urlParams.get('passno');
                 var isScan    = urlParams.get('scan') === '1';
                 var isOffline = urlParams.get('offline') === '1';
 
+                // No passno at all — redirect to lookup page immediately
+                if (!passno) {
+                    window.location.replace('getEPass.jsp.html');
+                    return;
+                }
+
                 // QR-scan mode: allow direct access without session auth
+                // and silently clean up the scan param from the visible URL
                 if (isScan) {
                     sessionStorage.setItem('epass_scan_mode_' + passno, '1');
+                    // Remove ?scan=1 from the address bar so it stays clean
+                    var cleanParams = new URLSearchParams(window.location.search);
+                    cleanParams.delete('scan');
+                    var cleanUrl = window.location.pathname + '?' + cleanParams.toString();
+                    window.history.replaceState({}, '', cleanUrl);
                     return; // ✅ allow the page to load
                 }
 
@@ -326,7 +339,8 @@
             // ── Session Timer (QR-Scan: 5 Min & Normal mode: 1 Hour) ─────
             (function() {
                 var urlParams  = new URLSearchParams(window.location.search);
-                var passno     = urlParams.get('passno') || '7502032600973';
+                var passno     = urlParams.get('passno');
+                if (!passno) return; // No passno — already redirected above
                 var isScan     = (urlParams.get('scan') === '1') ||
                                  (sessionStorage.getItem('epass_scan_mode_' + passno) === '1');
                 var sessionKey = 'pass_session_' + passno;
@@ -408,15 +422,36 @@
 
             (async function() {
                 var urlParams = new URLSearchParams(window.location.search);
-                var passno    = urlParams.get('passno') || '7502032600973';
-                var nameParam = urlParams.get('name')   || 'DEMO PASS HOLDER';
+                var passno    = urlParams.get('passno');
+                var nameParam   = urlParams.get('name')   || '';
                 var mobileParam = urlParams.get('mobile') || '';
                 var dobParam    = urlParams.get('dob')    || '';
                 var isOffline   = urlParams.get('offline') === '1';
+
+                // Safety: if no passno and not offline/LOOKUP mode, redirect now
+                if (!passno && !isOffline) {
+                    window.location.replace('getEPass.jsp.html');
+                    return;
+                }
+
                 var apiHost   = 'https://dtcpass-backend-api.onrender.com';
                 if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
                     apiHost = 'http://localhost:5000';
                 }
+
+                // ── Silent keep-alive pinger ───────────────────────────────
+                // Pings /api/health every 13 minutes so Render never idles.
+                // Shows NO UI — purely invisible background ping.
+                (function startKeepalive() {
+                    var PING_URL  = 'https://dtcpass-backend-api.onrender.com/api/health';
+                    var PING_INTERVAL = 13 * 60 * 1000; // 13 min in ms
+                    function silentPing() {
+                        fetch(PING_URL, { method: 'GET', cache: 'no-store' })
+                            .catch(function() {}); // Silently ignore errors
+                    }
+                    silentPing(); // Immediate ping on page load to wake backend
+                    setInterval(silentPing, PING_INTERVAL);
+                })();
 
                 // ── helpers ────────────────────────────────────────────────
                 function renderPassData(data) {
@@ -521,70 +556,76 @@
                     }
                 }
 
+                // If we have cached data, show it immediately while fetching fresh data in background
                 if (cachedData) {
                     renderPassData(cachedData);
                 }
 
-                // Offline mode: show fallback immediately (backend was unreachable)
+                // Offline / LOOKUP mode — cached data already shown above, nothing more to do
                 if (isOffline || passno.startsWith('LOOKUP_')) {
-                    if (!cachedData) {
-                        setFallback();
-                    }
                     return;
                 }
 
+                // ── Silent retry loop ─────────────────────────────────────────
+                // Keeps the spinner visible and retries every 8 s until the
+                // backend wakes up and returns real data. Nothing is ever shown
+                // on screen while waiting — only the loading spinner.
+                var _retryTimer = null;
+                var _maxRetries = 20; // 20 × 8 s = ~2.7 min max wait
+                var _attempt    = 0;
 
-                try {
-                    const ctrl  = new AbortController();
-                    // 15s timeout — backend is always awake via cron; 15s handles brief network delays
-                    const timer = setTimeout(function() { ctrl.abort(); }, 15000);
-                    const response = await fetch(apiHost + '/api/passes/' + passno + '?t=' + new Date().getTime(),
-                                                 { signal: ctrl.signal });
-                    clearTimeout(timer);
+                async function _fetchPass() {
+                    _attempt++;
+                    var data = null;
 
-                    if (!response.ok) throw new Error('Pass not found');
-                    const data = await response.json();
-
-                    // Render fresh data and cache in BOTH sessionStorage AND localStorage
-                    renderPassData(data);
+                    // 1️⃣ Try local/Render API
                     try {
-                        sessionStorage.setItem('epass_data_' + data.passno, JSON.stringify(data));
-                        // localStorage cache survives browser restarts — real user's own pass
-                        localStorage.setItem('epass_persistent_' + data.passno, JSON.stringify(data));
-                    } catch (e) {}
+                        var ctrl  = new AbortController();
+                        var timer = setTimeout(function() { ctrl.abort(); }, 10000);
+                        var resp  = await fetch(apiHost + '/api/passes/' + passno + '?t=' + Date.now(),
+                                               { signal: ctrl.signal });
+                        clearTimeout(timer);
+                        if (resp && resp.ok) {
+                            data = await resp.json();
+                        }
+                    } catch (_e1) {}
 
-                    // Dynamically update URL and passno variable if edited passno differs from URL parameter
-                    if (passno !== data.passno) {
-                        window.history.replaceState({}, '', '?passno=' + data.passno);
+                    // 2️⃣ Fallback to Render cloud if local didn't work
+                    if (!data && apiHost !== 'https://dtcpass-backend-api.onrender.com') {
+                        try {
+                            var ctrl2  = new AbortController();
+                            var timer2 = setTimeout(function() { ctrl2.abort(); }, 12000);
+                            var resp2  = await fetch('https://dtcpass-backend-api.onrender.com/api/passes/' + passno + '?t=' + Date.now(),
+                                                    { signal: ctrl2.signal });
+                            clearTimeout(timer2);
+                            if (resp2 && resp2.ok) {
+                                data = await resp2.json();
+                            }
+                        } catch (_e2) {}
                     }
 
-                } catch (err) {
-                    console.warn('API not available, using fallback:', err.message);
-
-                    // Try localStorage persistent cache first (real user data survives restarts)
-                    var persistentData = null;
-                    try {
-                        var rawPersistent = localStorage.getItem('epass_persistent_' + passno);
-                        if (rawPersistent) persistentData = JSON.parse(rawPersistent);
-                    } catch (e) {}
-
-                    if (persistentData) {
-                        // Show real user data with an offline warning banner
-                        renderPassData(persistentData);
-                        var offlineBanner = document.createElement('div');
-                        offlineBanner.style.cssText = [
-                            'position:fixed','top:0','left:0','width:100%',
-                            'background:#e67e22','color:#fff','text-align:center',
-                            'padding:8px 15px','font-size:13px','font-weight:700',
-                            'z-index:9999','font-family:sans-serif'
-                        ].join(';');
-                        offlineBanner.innerHTML = '⚠️ Showing cached pass data (server offline). Reload to refresh.';
-                        document.body.insertBefore(offlineBanner, document.body.firstChild);
-                    } else if (!cachedData) {
-                        // Only show generic fallback if we have truly NO data at all
-                        setFallback();
+                    if (data) {
+                        // ✅ Got real data — render pass and update caches
+                        renderPassData(data);
+                        try {
+                            sessionStorage.setItem('epass_data_' + data.passno, JSON.stringify(data));
+                            localStorage.setItem('epass_persistent_' + data.passno, JSON.stringify(data));
+                        } catch (_ce) {}
+                        if (passno !== data.passno) {
+                            window.history.replaceState({}, '', '?passno=' + data.passno);
+                        }
+                        return; // Done — do NOT schedule another retry
                     }
+
+                    // ❌ No data yet — keep spinner visible and retry silently
+                    if (_attempt < _maxRetries) {
+                        _retryTimer = setTimeout(_fetchPass, 8000);
+                    }
+                    // If max retries exhausted: spinner stays visible with no extra message.
+                    // User can reload the page manually.
                 }
+
+                _fetchPass();
             })();
         </script>
     </body>

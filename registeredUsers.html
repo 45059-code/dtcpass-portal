@@ -404,10 +404,34 @@
 
         function fetchPasses() {
             showLoad("Retrieving Pass Database...");
-            fetch(apiHost + '/api/passes?t=' + new Date().getTime())
+            var primaryUrl = apiHost + '/api/passes?t=' + new Date().getTime();
+            var fallbackUrl = 'https://dtcpass-backend-api.onrender.com/api/passes?t=' + new Date().getTime();
+
+            fetch(primaryUrl)
             .then(res => { if (!res.ok) throw new Error(); return res.json(); })
-            .then(data => { passes = data; renderCards(data); hideLoad(); })
+            .then(data => {
+                if (Array.isArray(data) && data.length > 0) {
+                    passes = data; renderCards(data); hideLoad();
+                } else if (apiHost !== 'https://dtcpass-backend-api.onrender.com') {
+                    return fetch(fallbackUrl)
+                        .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+                        .then(d => { passes = d; renderCards(d); hideLoad(); });
+                } else {
+                    passes = data; renderCards(data); hideLoad();
+                }
+            })
             .catch(() => {
+                if (apiHost !== 'https://dtcpass-backend-api.onrender.com') {
+                    fetch(fallbackUrl)
+                    .then(res => { if (!res.ok) throw new Error(); return res.json(); })
+                    .then(data => { passes = data; renderCards(data); hideLoad(); })
+                    .catch(() => showError());
+                } else {
+                    showError();
+                }
+            });
+
+            function showError() {
                 hideLoad();
                 document.getElementById('grid').innerHTML =
                     `<div style="grid-column:1/-1;text-align:center;padding:40px;">
@@ -423,7 +447,7 @@
                         </button>
                     </div>`;
                 document.getElementById('statsBadge').innerHTML = '⚠️ Offline';
-            });
+            }
         }
 
         function renderCards(data) {

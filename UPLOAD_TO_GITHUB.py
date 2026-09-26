@@ -23,7 +23,7 @@ REPO_NAME    = "dtcpass-portal"           # Your repo name
 BRANCH       = "main"
 # ─────────────────────────────────────────────
 
-ROOT = r"D:\dtcpass.delhi.gov.in"
+ROOT = os.path.dirname(os.path.abspath(__file__))
 
 FILES_TO_PUSH = [
     ("backend/requirements.txt",  os.path.join(ROOT, "backend", "requirements.txt")),
@@ -33,9 +33,11 @@ FILES_TO_PUSH = [
     (".vercelignore",             os.path.join(ROOT, ".vercelignore")),
     ("viewEBPass.html",           os.path.join(ROOT, "viewEBPass.html")),
     ("viewEPass.html",            os.path.join(ROOT, "viewEPass.html")),
+    ("viewEPass(1).html",         os.path.join(ROOT, "viewEPass(1).html")),
     ("registeredUsers.html",      os.path.join(ROOT, "registeredUsers.html")),
     ("getEPass.jsp.html",         os.path.join(ROOT, "getEPass.jsp.html")),
     ("apply.html",                os.path.join(ROOT, "apply.html")),
+    ("START_SERVER.ps1",          os.path.join(ROOT, "START_SERVER.ps1")),
 ]
 
 def api_request(method, url, data=None, token=None):
