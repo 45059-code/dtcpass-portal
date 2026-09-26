@@ -17,7 +17,7 @@ import os
 
 # ─────────────────────────────────────────────
 # FILL IN YOUR DETAILS HERE
-GITHUB_TOKEN = "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"   # Paste your token
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "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")
 REPO_OWNER   = "45059-code"               # Your GitHub username
 REPO_NAME    = "dtcpass-portal"           # Your repo name
 BRANCH       = "main"
@@ -41,8 +41,9 @@ FILES_TO_PUSH = [
 ]
 
 def api_request(method, url, data=None, token=None):
+    auth_header = f"Bearer {token}" if (token and token.startswith("github_pat_")) else f"token {token}"
     headers = {
-        "Authorization": f"token {token}",
+        "Authorization": auth_header,
         "Accept": "application/vnd.github.v3+json",
         "Content-Type": "application/json",
         "User-Agent": "dtcpass-uploader/1.0"
@@ -50,11 +51,13 @@ def api_request(method, url, data=None, token=None):
     body = json.dumps(data).encode() if data else None
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(req) as resp:
+        with urllib.request.urlopen(req, timeout=30) as resp:
             return json.loads(resp.read()), resp.status
     except urllib.error.HTTPError as e:
         error_body = e.read().decode()
         return json.loads(error_body) if error_body else {}, e.code
+    except Exception as e:
+        return {"message": str(e)}, 500
 
 def get_file_sha(path_in_repo):
     url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{path_in_repo}?ref={BRANCH}"

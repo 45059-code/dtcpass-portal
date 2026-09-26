@@ -1,7 +1,10 @@
 # DTC e-BusPass - GitHub Uploader using PowerShell (Windows native networking)
 # Right-click > Run with PowerShell
 
-$TOKEN     = "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"
+$TOKEN = $env:GITHUB_TOKEN
+if (-not $TOKEN) {
+    $TOKEN = "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"
+}
 $OWNER     = "45059-code"
 $REPO      = "dtcpass-portal"
 $BRANCH    = "main"
