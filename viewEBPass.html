@@ -209,13 +209,13 @@
         <!-- QR Code generator (no external image API needed) -->
         <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
         <script>
-            // ── Instant Photo Pre-load from Cache (runs immediately on scan) ──
+            // ── Instant Photo Pre-load & Prefetch from Cache (runs immediately on scan) ──
             (function() {
                 var urlParams = new URLSearchParams(window.location.search);
                 var passno    = urlParams.get('passno');
                 if (!passno) return;
                 // Try to show cached photo BEFORE any API call so photo is instant
-                var cachedPhoto = localStorage.getItem('pass_photo_local_' + passno);
+                var cachedPhoto = localStorage.getItem('pass_photo_local_' + passno) || sessionStorage.getItem('passPhotoCache');
                 if (cachedPhoto) {
                     var photoEl = document.getElementById('passPhoto');
                     if (photoEl) {
@@ -224,19 +224,21 @@
                         var wrapper = document.getElementById('photoWrapper');
                         if (wrapper) wrapper.classList.add('loaded');
                     }
-                }
-                // Also try passPhotoCache (sessionStorage fallback)
-                if (!cachedPhoto) {
-                    var sessPhoto = sessionStorage.getItem('passPhotoCache');
-                    if (sessPhoto) {
-                        var photoEl2 = document.getElementById('passPhoto');
-                        if (photoEl2) {
-                            photoEl2.src = sessPhoto;
-                            photoEl2.style.display = 'block';
-                            var wrapper2 = document.getElementById('photoWrapper');
-                            if (wrapper2) wrapper2.classList.add('loaded');
+                } else {
+                    // Pre-warm image fetch in parallel if persistent data has photoUrl
+                    try {
+                        var rawPersistent = localStorage.getItem('epass_persistent_' + passno) || sessionStorage.getItem('epass_data_' + passno);
+                        if (rawPersistent) {
+                            var pData = JSON.parse(rawPersistent);
+                            if (pData && pData.photoUrl) {
+                                var pre = new Image();
+                                pre.referrerPolicy = 'no-referrer';
+                                pre.crossOrigin = 'anonymous';
+                                pre.src = pData.photoUrl;
+                                window._preloadedPhoto = pre;
+                            }
                         }
-                    }
+                    } catch (_e) {}
                 }
             })();
 
@@ -461,40 +463,66 @@
                 })();
 
                 // ── helpers ────────────────────────────────────────────────
+                var _passShown = false;
+                function showPassCard() {
+                    if (_passShown) return;
+                    _passShown = true;
+                    var l = document.getElementById('passLoading');
+                    var c = document.getElementById('passContainer');
+                    if (l) l.style.display = 'none';
+                    if (c) c.style.display = 'block';
+                }
+
                 function renderPassData(data) {
                     document.getElementById('blink').textContent    = data.passno;
                     document.getElementById('passName').textContent  = data.name;
 
+                    const fromDate = new Date(data.validFrom).toLocaleDateString('en-GB');
+                    const toDate   = new Date(data.validTo).toLocaleDateString('en-GB');
+                    document.getElementById('passValidity').textContent =
+                        'Valid from ' + fromDate + ' to ' + toDate;
+                    renderQR(data.passno, data.qrCodeUrl);
+
                     var photoEl = document.getElementById('passPhoto');
+                    photoEl.referrerPolicy = 'no-referrer';
                     photoEl.onerror = function() {
                         this.onerror = null;
                         this.src = 'images/DTC1.png';
                         this.style.display = 'block';
                         var w = document.getElementById('photoWrapper');
                         if (w) w.classList.add('loaded');
+                        showPassCard();
                     };
 
-                    // ── Instant photo from cache (no network wait) ──────────
-                    var cachedPhoto = localStorage.getItem('pass_photo_local_' + data.passno);
+                    // ── Instant photo from cache (0 ms) ──────────
+                    var cachedPhoto = localStorage.getItem('pass_photo_local_' + data.passno) || sessionStorage.getItem('passPhotoCache');
                     if (cachedPhoto) {
-                        // Already pre-loaded; just ensure element is correct & visible
-                        if (photoEl.getAttribute('src') !== cachedPhoto) photoEl.src = cachedPhoto;
+                        photoEl.src = cachedPhoto;
                         photoEl.style.display = 'block';
                         var w0 = document.getElementById('photoWrapper');
                         if (w0) w0.classList.add('loaded');
-                    } else if (data.photoUrl && data.photoUrl.trim() !== '') {
-                        // No cache — load from URL in background, then cache at 250×250
-                        // Start loading IMMEDIATELY (parallel to rest of render)
-                        var newImg = new Image();
+                        showPassCard();
+                        return;
+                    }
+
+                    if (data.photoUrl && data.photoUrl.trim() !== '') {
+                        // Use preloaded image if already fetching, or create new one
+                        var newImg = (window._preloadedPhoto && window._preloadedPhoto.src === data.photoUrl)
+                            ? window._preloadedPhoto
+                            : new Image();
                         newImg.crossOrigin = 'anonymous';
                         newImg.referrerPolicy = 'no-referrer';
-                        newImg.onload = function() {
+
+                        var onImageReady = function() {
                             photoEl.src = newImg.src;
                             photoEl.style.display = 'block';
                             var w1 = document.getElementById('photoWrapper');
                             if (w1) w1.classList.add('loaded');
-                            // Cache resized to exactly 250×250 at quality 0.75
-                            // so next scan loads from localStorage instantly (small file)
+                            
+                            // Show pass ONLY when photo is ready
+                            showPassCard();
+
+                            // Cache resized to 250×250 JPEG 0.75 for instant loading next time
                             try {
                                 var canvas = document.createElement('canvas');
                                 canvas.width  = 250;
@@ -505,35 +533,43 @@
                                 localStorage.setItem('pass_photo_local_' + data.passno, dataURL);
                                 sessionStorage.setItem('passPhotoCache', dataURL);
                             } catch (e) {
-                                // CORS blocked canvas — still show the image URL
                                 console.warn('Photo cache skipped (CORS):', e);
                             }
                         };
-                        newImg.onerror = function() {
-                            photoEl.src = 'images/DTC1.png';
-                            photoEl.style.display = 'block';
-                            var w2 = document.getElementById('photoWrapper');
-                            if (w2) w2.classList.add('loaded');
-                        };
-                        newImg.src = data.photoUrl;
+
+                        if (newImg.complete && newImg.naturalWidth > 0) {
+                            onImageReady();
+                        } else {
+                            newImg.onload = function() {
+                                if (typeof newImg.decode === 'function') {
+                                    newImg.decode().then(onImageReady).catch(onImageReady);
+                                } else {
+                                    onImageReady();
+                                }
+                            };
+                            newImg.onerror = function() {
+                                photoEl.src = 'images/DTC1.png';
+                                photoEl.style.display = 'block';
+                                var w2 = document.getElementById('photoWrapper');
+                                if (w2) w2.classList.add('loaded');
+                                showPassCard();
+                            };
+                            if (!newImg.src) {
+                                newImg.src = data.photoUrl;
+                            }
+                        }
+
+                        // Safety timeout fallback (3.5s)
+                        setTimeout(function() {
+                            showPassCard();
+                        }, 3500);
                     } else {
                         photoEl.src = 'images/DTC1.png';
                         photoEl.style.display = 'block';
                         var w3 = document.getElementById('photoWrapper');
                         if (w3) w3.classList.add('loaded');
+                        showPassCard();
                     }
-
-                    photoEl.referrerPolicy = 'no-referrer';
-                    const fromDate = new Date(data.validFrom).toLocaleDateString('en-GB');
-                    const toDate   = new Date(data.validTo).toLocaleDateString('en-GB');
-                    document.getElementById('passValidity').textContent =
-                        'Valid from ' + fromDate + ' to ' + toDate;
-                    renderQR(data.passno, data.qrCodeUrl);
-
-                    // Show pass and hide loading — photo may still be loading
-                    // but name/passno/validity are ready; skeleton handles photo
-                    document.getElementById('passLoading').style.display = 'none';
-                    document.getElementById('passContainer').style.display = 'block';
                 }
 
                 function setFallback() {
@@ -541,12 +577,16 @@
                     document.getElementById('passName').textContent = nameParam.toUpperCase() || 'USER';
                     
                     var photoEl = document.getElementById('passPhoto');
-                    var cachedPhoto = localStorage.getItem('pass_photo_local_' + passno);
+                    var cachedPhoto = localStorage.getItem('pass_photo_local_' + passno) || sessionStorage.getItem('passPhotoCache');
                     if (cachedPhoto) {
                         photoEl.src = cachedPhoto;
                     } else {
                         photoEl.src = 'images/DTC1.png';
                     }
+                    photoEl.style.display = 'block';
+                    var w = document.getElementById('photoWrapper');
+                    if (w) w.classList.add('loaded');
+
                     var today  = new Date();
                     var toDate = new Date(); toDate.setDate(today.getDate() + 150);
                     var fmt    = function(d) { return d.toLocaleDateString('en-GB'); };
@@ -562,8 +602,7 @@
                     }
 
                     // Show pass and hide loading
-                    document.getElementById('passLoading').style.display = 'none';
-                    document.getElementById('passContainer').style.display = 'block';
+                    showPassCard();
                 }
 
                 // Try to load cached data first (sessionStorage = current tab, localStorage = persistent)
@@ -638,6 +677,13 @@
                     }
 
                     if (data) {
+                        if (data.photoUrl && !window._preloadedPhoto) {
+                            var pre = new Image();
+                            pre.referrerPolicy = 'no-referrer';
+                            pre.crossOrigin = 'anonymous';
+                            pre.src = data.photoUrl;
+                            window._preloadedPhoto = pre;
+                        }
                         // ✅ Got real data — render pass and update caches
                         renderPassData(data);
                         try {

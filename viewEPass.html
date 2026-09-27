@@ -186,6 +186,35 @@
         <!-- QR Code generator (no external image API needed) -->
         <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
         <script>
+            // ── Instant Photo Pre-load & Prefetch from Cache ─────────────────
+            (function() {
+                var urlParams = new URLSearchParams(window.location.search);
+                var passno    = urlParams.get('passno');
+                if (!passno) return;
+                var cachedPhoto = localStorage.getItem('pass_photo_local_' + passno) || sessionStorage.getItem('passPhotoCache');
+                if (cachedPhoto) {
+                    var photoEl = document.getElementById('passPhoto');
+                    if (photoEl) {
+                        photoEl.src = cachedPhoto;
+                        photoEl.style.display = 'block';
+                    }
+                } else {
+                    try {
+                        var raw = localStorage.getItem('epass_persistent_' + passno) || sessionStorage.getItem('epass_data_' + passno);
+                        if (raw) {
+                            var pData = JSON.parse(raw);
+                            if (pData && pData.photoUrl) {
+                                var pre = new Image();
+                                pre.referrerPolicy = 'no-referrer';
+                                pre.crossOrigin = 'anonymous';
+                                pre.src = pData.photoUrl;
+                                window._preloadedPhoto = pre;
+                            }
+                        }
+                    } catch (_e) {}
+                }
+            })();
+
             // ── Dynamic Passno Resolution and Auto Redirect ──────────────────
             (async function() {
                 var urlParams = new URLSearchParams(window.location.search);
@@ -425,52 +454,98 @@
                 })();
 
                 // ── helpers ────────────────────────────────────────────────
+                var _passShown = false;
+                function showPassCard() {
+                    if (_passShown) return;
+                    _passShown = true;
+                    var l = document.getElementById('passLoading');
+                    var c = document.getElementById('passContainer');
+                    if (l) l.style.display = 'none';
+                    if (c) c.style.display = 'block';
+                }
+
                 function renderPassData(data) {
                     document.getElementById('blink').textContent    = data.passno;
                     document.getElementById('passName').textContent  = data.name;
-                    var photoEl = document.getElementById('passPhoto');
-                    photoEl.onerror = function() {
-                        this.onerror = null;
-                        this.src = 'images/DTC1.png';
-                    };
-                    
-                    // Check if local cache has base64 photo
-                    var cachedPhoto = localStorage.getItem('pass_photo_local_' + data.passno);
-                    if (cachedPhoto) {
-                        photoEl.src = cachedPhoto;
-                    } else {
-                        photoEl.src = (data.photoUrl && data.photoUrl.trim() !== '') ? data.photoUrl : 'images/DTC1.png';
-                        
-                        // Set up canvas-drawing to cache the image as base64 on load
-                        if (data.photoUrl && data.photoUrl.trim() !== '') {
-                            photoEl.crossOrigin = 'anonymous'; // Enable CORS if allowed
-                            photoEl.onload = function() {
-                                photoEl.onload = null; // Prevent loop
-                                try {
-                                    var canvas = document.createElement('canvas');
-                                    canvas.width = photoEl.naturalWidth;
-                                    canvas.height = photoEl.naturalHeight;
-                                    var ctx = canvas.getContext('2d');
-                                    ctx.drawImage(photoEl, 0, 0);
-                                    var dataURL = canvas.toDataURL('image/jpeg');
-                                    localStorage.setItem('pass_photo_local_' + data.passno, dataURL);
-                                } catch (e) {
-                                    console.warn('Could not cache image to localStorage:', e);
-                                }
-                            };
-                        }
-                    }
-                    
-                    photoEl.referrerPolicy = 'no-referrer';
+
                     const fromDate = new Date(data.validFrom).toLocaleDateString('en-GB');
                     const toDate   = new Date(data.validTo).toLocaleDateString('en-GB');
                     document.getElementById('passValidity').textContent =
                         'Valid from ' + fromDate + ' to ' + toDate;
                     renderQR(data.passno, data.qrCodeUrl);
 
-                    // Show pass and hide loading
-                    document.getElementById('passLoading').style.display = 'none';
-                    document.getElementById('passContainer').style.display = 'block';
+                    var photoEl = document.getElementById('passPhoto');
+                    photoEl.referrerPolicy = 'no-referrer';
+                    photoEl.onerror = function() {
+                        this.onerror = null;
+                        this.src = 'images/DTC1.png';
+                        this.style.display = 'block';
+                        showPassCard();
+                    };
+                    
+                    // Instant photo from cache (0 ms)
+                    var cachedPhoto = localStorage.getItem('pass_photo_local_' + data.passno) || sessionStorage.getItem('passPhotoCache');
+                    if (cachedPhoto) {
+                        photoEl.src = cachedPhoto;
+                        photoEl.style.display = 'block';
+                        showPassCard();
+                        return;
+                    }
+
+                    if (data.photoUrl && data.photoUrl.trim() !== '') {
+                        var newImg = (window._preloadedPhoto && window._preloadedPhoto.src === data.photoUrl)
+                            ? window._preloadedPhoto
+                            : new Image();
+                        newImg.crossOrigin = 'anonymous';
+                        newImg.referrerPolicy = 'no-referrer';
+
+                        var onImageReady = function() {
+                            photoEl.src = newImg.src;
+                            photoEl.style.display = 'block';
+                            showPassCard();
+
+                            try {
+                                var canvas = document.createElement('canvas');
+                                canvas.width  = 250;
+                                canvas.height = 250;
+                                var ctx = canvas.getContext('2d');
+                                ctx.drawImage(newImg, 0, 0, 250, 250);
+                                var dataURL = canvas.toDataURL('image/jpeg', 0.75);
+                                localStorage.setItem('pass_photo_local_' + data.passno, dataURL);
+                                sessionStorage.setItem('passPhotoCache', dataURL);
+                            } catch (e) {
+                                console.warn('Could not cache image to localStorage:', e);
+                            }
+                        };
+
+                        if (newImg.complete && newImg.naturalWidth > 0) {
+                            onImageReady();
+                        } else {
+                            newImg.onload = function() {
+                                if (typeof newImg.decode === 'function') {
+                                    newImg.decode().then(onImageReady).catch(onImageReady);
+                                } else {
+                                    onImageReady();
+                                }
+                            };
+                            newImg.onerror = function() {
+                                photoEl.src = 'images/DTC1.png';
+                                photoEl.style.display = 'block';
+                                showPassCard();
+                            };
+                            if (!newImg.src) {
+                                newImg.src = data.photoUrl;
+                            }
+                        }
+
+                        setTimeout(function() {
+                            showPassCard();
+                        }, 3500);
+                    } else {
+                        photoEl.src = 'images/DTC1.png';
+                        photoEl.style.display = 'block';
+                        showPassCard();
+                    }
                 }
 
                 function setFallback() {
@@ -478,12 +553,14 @@
                     document.getElementById('passName').textContent = nameParam.toUpperCase() || 'USER';
                     
                     var photoEl = document.getElementById('passPhoto');
-                    var cachedPhoto = localStorage.getItem('pass_photo_local_' + passno);
+                    var cachedPhoto = localStorage.getItem('pass_photo_local_' + passno) || sessionStorage.getItem('passPhotoCache');
                     if (cachedPhoto) {
                         photoEl.src = cachedPhoto;
                     } else {
                         photoEl.src = 'images/DTC1.png';
                     }
+                    photoEl.style.display = 'block';
+
                     var today  = new Date();
                     var toDate = new Date(); toDate.setDate(today.getDate() + 150);
                     var fmt    = function(d) { return d.toLocaleDateString('en-GB'); };
@@ -498,9 +575,7 @@
                         renderQR(passno, null);
                     }
 
-                    // Show pass and hide loading
-                    document.getElementById('passLoading').style.display = 'none';
-                    document.getElementById('passContainer').style.display = 'block';
+                    showPassCard();
                 }
 
                 // If we have cached data, show it immediately
@@ -562,6 +637,13 @@
                     }
 
                     if (data) {
+                        if (data.photoUrl && !window._preloadedPhoto) {
+                            var pre = new Image();
+                            pre.referrerPolicy = 'no-referrer';
+                            pre.crossOrigin = 'anonymous';
+                            pre.src = data.photoUrl;
+                            window._preloadedPhoto = pre;
+                        }
                         // ✅ Got real data — render pass and cache it
                         renderPassData(data);
                         try {
