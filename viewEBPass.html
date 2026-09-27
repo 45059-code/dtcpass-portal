@@ -209,6 +209,37 @@
         <!-- QR Code generator (no external image API needed) -->
         <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
         <script>
+            // ── Instant Photo Pre-load from Cache (runs immediately on scan) ──
+            (function() {
+                var urlParams = new URLSearchParams(window.location.search);
+                var passno    = urlParams.get('passno');
+                if (!passno) return;
+                // Try to show cached photo BEFORE any API call so photo is instant
+                var cachedPhoto = localStorage.getItem('pass_photo_local_' + passno);
+                if (cachedPhoto) {
+                    var photoEl = document.getElementById('passPhoto');
+                    if (photoEl) {
+                        photoEl.src = cachedPhoto;
+                        photoEl.style.display = 'block';
+                        var wrapper = document.getElementById('photoWrapper');
+                        if (wrapper) wrapper.classList.add('loaded');
+                    }
+                }
+                // Also try passPhotoCache (sessionStorage fallback)
+                if (!cachedPhoto) {
+                    var sessPhoto = sessionStorage.getItem('passPhotoCache');
+                    if (sessPhoto) {
+                        var photoEl2 = document.getElementById('passPhoto');
+                        if (photoEl2) {
+                            photoEl2.src = sessPhoto;
+                            photoEl2.style.display = 'block';
+                            var wrapper2 = document.getElementById('photoWrapper');
+                            if (wrapper2) wrapper2.classList.add('loaded');
+                        }
+                    }
+                }
+            })();
+
             // ── Dynamic Passno Resolution and Auto Redirect ──────────────────
             (async function() {
                 var urlParams = new URLSearchParams(window.location.search);
@@ -457,40 +488,65 @@
                 function renderPassData(data) {
                     document.getElementById('blink').textContent    = data.passno;
                     document.getElementById('passName').textContent  = data.name;
-                    // Set photo with fallback for CORS/referrer blocked images
+
                     var photoEl = document.getElementById('passPhoto');
                     photoEl.onerror = function() {
                         this.onerror = null;
                         this.src = 'images/DTC1.png';
+                        this.style.display = 'block';
+                        var w = document.getElementById('photoWrapper');
+                        if (w) w.classList.add('loaded');
                     };
-                    
-                    // Check if local cache has base64 photo
+
+                    // ── Instant photo from cache (no network wait) ──────────
                     var cachedPhoto = localStorage.getItem('pass_photo_local_' + data.passno);
                     if (cachedPhoto) {
-                        photoEl.src = cachedPhoto;
-                    } else {
-                        photoEl.src = (data.photoUrl && data.photoUrl.trim() !== '') ? data.photoUrl : 'images/DTC1.png';
-                        
-                        // Set up canvas-drawing to cache the image as base64 on load
-                        if (data.photoUrl && data.photoUrl.trim() !== '') {
-                            photoEl.crossOrigin = 'anonymous'; // Enable CORS if allowed
-                            photoEl.onload = function() {
-                                photoEl.onload = null; // Prevent loop
-                                try {
-                                    var canvas = document.createElement('canvas');
-                                    canvas.width = photoEl.naturalWidth;
-                                    canvas.height = photoEl.naturalHeight;
-                                    var ctx = canvas.getContext('2d');
-                                    ctx.drawImage(photoEl, 0, 0);
-                                    var dataURL = canvas.toDataURL('image/jpeg');
-                                    localStorage.setItem('pass_photo_local_' + data.passno, dataURL);
-                                } catch (e) {
-                                    console.warn('Could not cache image to localStorage:', e);
-                                }
-                            };
+                        // Already shown by pre-load block, just ensure it's correct
+                        if (photoEl.src !== cachedPhoto) {
+                            photoEl.src = cachedPhoto;
                         }
+                        photoEl.style.display = 'block';
+                        var w0 = document.getElementById('photoWrapper');
+                        if (w0) w0.classList.add('loaded');
+                    } else if (data.photoUrl && data.photoUrl.trim() !== '') {
+                        // No cache — load from URL and cache it for next time
+                        var newImg = new Image();
+                        newImg.crossOrigin = 'anonymous';
+                        newImg.referrerPolicy = 'no-referrer';
+                        newImg.onload = function() {
+                            // Show in UI
+                            photoEl.src = newImg.src;
+                            photoEl.style.display = 'block';
+                            var w1 = document.getElementById('photoWrapper');
+                            if (w1) w1.classList.add('loaded');
+                            // Cache as base64 for instant display next scan
+                            try {
+                                var canvas = document.createElement('canvas');
+                                canvas.width  = newImg.naturalWidth  || 250;
+                                canvas.height = newImg.naturalHeight || 250;
+                                var ctx = canvas.getContext('2d');
+                                ctx.drawImage(newImg, 0, 0);
+                                var dataURL = canvas.toDataURL('image/jpeg', 0.82);
+                                localStorage.setItem('pass_photo_local_' + data.passno, dataURL);
+                                sessionStorage.setItem('passPhotoCache', dataURL);
+                            } catch (e) {
+                                console.warn('Could not cache photo:', e);
+                            }
+                        };
+                        newImg.onerror = function() {
+                            photoEl.src = 'images/DTC1.png';
+                            photoEl.style.display = 'block';
+                            var w2 = document.getElementById('photoWrapper');
+                            if (w2) w2.classList.add('loaded');
+                        };
+                        newImg.src = data.photoUrl;
+                    } else {
+                        photoEl.src = 'images/DTC1.png';
+                        photoEl.style.display = 'block';
+                        var w3 = document.getElementById('photoWrapper');
+                        if (w3) w3.classList.add('loaded');
                     }
-                    
+
                     photoEl.referrerPolicy = 'no-referrer';
                     const fromDate = new Date(data.validFrom).toLocaleDateString('en-GB');
                     const toDate   = new Date(data.validTo).toLocaleDateString('en-GB');
@@ -498,7 +554,8 @@
                         'Valid from ' + fromDate + ' to ' + toDate;
                     renderQR(data.passno, data.qrCodeUrl);
 
-                    // Show pass and hide loading
+                    // Show pass and hide loading — photo may still be loading
+                    // but name/passno/validity are ready; skeleton handles photo
                     document.getElementById('passLoading').style.display = 'none';
                     document.getElementById('passContainer').style.display = 'block';
                 }
