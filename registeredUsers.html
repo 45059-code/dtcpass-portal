@@ -1,7 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <meta name="robots" content="noindex, nofollow">
+    <script>
+        if (sessionStorage.getItem('admin_authenticated') !== 'true') {
+            window.location.replace('getEPass.jsp.html');
+        }
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DTC | Registered Users e-BusPass Manager</title>
@@ -318,10 +325,20 @@
             }, duration);
         }
 
-        // ── Track whether we recently sent a toggle (to avoid fetchSettings overriding it) ──
-        var _pendingToggle = false;
+        // ── Security Check: Block direct URL and back-button access without login ──
+        function checkAdminAuth() {
+            if (sessionStorage.getItem('admin_authenticated') !== 'true') {
+                window.location.replace('getEPass.jsp.html');
+                return false;
+            }
+            return true;
+        }
+
+        window.addEventListener('pageshow', checkAdminAuth);
+        window.addEventListener('popstate', checkAdminAuth);
 
         window.onload = () => {
+            if (!checkAdminAuth()) return;
             fetchPasses();
             fetchSettings();
         };

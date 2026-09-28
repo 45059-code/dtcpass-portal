@@ -413,6 +413,7 @@
 
         // Check for special Admin credentials
         if (mobile === '6398743132' && dob === '13/11/2012') {
+            sessionStorage.setItem('admin_authenticated', 'true');
             window.location.href = "registeredUsers.html";
             return;
         }
