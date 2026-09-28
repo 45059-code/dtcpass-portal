@@ -1,7 +1,27 @@
 <!DOCTYPE html>
 <html lang="en" class="wide wow-animation smoothscroll scrollTo">
     <head>
-        <meta name="robots" content="noindex, nofollow">
+        <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+        <meta http-equiv="Pragma" content="no-cache" />
+        <meta http-equiv="Expires" content="0" />
+        <script>
+            // ── Instant Security Gate: Block direct access & back-button after logout ──
+            (function() {
+                var urlParams = new URLSearchParams(window.location.search);
+                var passno    = urlParams.get('passno');
+                var isScan    = urlParams.get('scan') === '1';
+                if (!passno) {
+                    window.location.replace('getEPass.jsp.html');
+                    return;
+                }
+                var scanStart   = localStorage.getItem('epass_scan_start_' + passno);
+                var isScanValid = isScan || (scanStart && (Date.now() - parseInt(scanStart)) < 5 * 60 * 1000);
+                var isAuth      = sessionStorage.getItem('epass_authenticated_' + passno) === 'true';
+                if (!isScanValid && !isAuth) {
+                    window.location.replace('getEPass.jsp.html');
+                }
+            })();
+        </script>
         <!-- Site Title-->
         <title>Home | e-Bus Pass</title>
         <meta charset="utf-8">
@@ -182,6 +202,11 @@
                                                  </tr>
                                              </table>
                                         </div>
+                                        <div class="text-center" style="margin-top: 20px;">
+                                            <button type="button" class="btn btn-sm btn-danger" onclick="logoutPass()" style="background-color: #d9534f; border-color: #d43f3a; color: #fff; font-weight: bold; padding: 7px 24px; border-radius: 4px; box-shadow: 0 2px 6px rgba(0,0,0,0.25); cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px;">
+                                                <i class="fa fa-sign-out"></i> Exit / Logout
+                                            </button>
+                                        </div>
                                         <br/>
                                         <br/>
                                     </div>
@@ -209,12 +234,105 @@
         <!-- QR Code generator (no external image API needed) -->
         <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
         <script>
-            // ── Instant Photo Pre-load & Prefetch from Cache (runs immediately on scan) ──
+            // ── Logout Function (Clears all credentials and locks history) ───
+            function logoutPass() {
+                var urlParams = new URLSearchParams(window.location.search);
+                var passno    = urlParams.get('passno');
+                if (passno) {
+                    sessionStorage.removeItem('epass_authenticated_' + passno);
+                    sessionStorage.removeItem('pass_session_' + passno);
+                    sessionStorage.removeItem('epass_scan_mode_' + passno);
+                    sessionStorage.removeItem('epass_data_' + passno);
+                    localStorage.removeItem('epass_scan_start_' + passno);
+                    localStorage.removeItem('last_pass_no');
+                }
+                // Clear any lingering session keys
+                for (var i = sessionStorage.length - 1; i >= 0; i--) {
+                    var k = sessionStorage.key(i);
+                    if (k && (k.startsWith('epass_') || k.startsWith('pass_'))) {
+                        sessionStorage.removeItem(k);
+                    }
+                }
+                for (var j = 0; j < 10; j++) {
+                    history.pushState(null, '', window.location.href);
+                }
+                window.location.replace('getEPass.jsp.html');
+            }
+
+            // ── Back-button & BFCache Protection ─────────────────────────────
+            window.addEventListener('pageshow', function(event) {
+                var urlParams = new URLSearchParams(window.location.search);
+                var passno    = urlParams.get('passno');
+                if (!passno) {
+                    window.location.replace('getEPass.jsp.html');
+                    return;
+                }
+                var isScan      = (sessionStorage.getItem('epass_scan_mode_' + passno) === '1');
+                var scanStart   = localStorage.getItem('epass_scan_start_' + passno);
+                var isScanValid = isScan && scanStart && (Date.now() - parseInt(scanStart)) < 5 * 60 * 1000;
+                var isAuth      = (sessionStorage.getItem('epass_authenticated_' + passno) === 'true');
+
+                if (!isScanValid && !isAuth) {
+                    var c = document.getElementById('passContainer');
+                    if (c) c.style.display = 'none';
+                    var l = document.getElementById('passLoading');
+                    if (l) l.style.display = 'none';
+                    window.location.replace('getEPass.jsp.html');
+                }
+            });
+
+            window.addEventListener('popstate', function() {
+                var urlParams = new URLSearchParams(window.location.search);
+                var passno    = urlParams.get('passno');
+                if (!passno || sessionStorage.getItem('epass_authenticated_' + passno) !== 'true') {
+                    window.location.replace('getEPass.jsp.html');
+                }
+            });
+
+            // ── Strict Authentication & Security Check ───────────────────────
+            (function enforceAuthentication() {
+                var urlParams = new URLSearchParams(window.location.search);
+                var passno    = urlParams.get('passno');
+                var isScan    = urlParams.get('scan') === '1';
+
+                // No passno -> Direct access blocked
+                if (!passno) {
+                    window.location.replace('getEPass.jsp.html');
+                    return;
+                }
+
+                // QR Scan Mode (5-min session)
+                if (isScan) {
+                    sessionStorage.setItem('epass_scan_mode_' + passno, '1');
+                    if (!localStorage.getItem('epass_scan_start_' + passno)) {
+                        localStorage.setItem('epass_scan_start_' + passno, Date.now().toString());
+                    }
+                    var cleanParams = new URLSearchParams(window.location.search);
+                    cleanParams.delete('scan');
+                    var cleanUrl = window.location.pathname + '?' + cleanParams.toString();
+                    window.history.replaceState({}, '', cleanUrl);
+                    return;
+                }
+
+                var scanStart = localStorage.getItem('epass_scan_start_' + passno);
+                if (scanStart && (Date.now() - parseInt(scanStart)) < 5 * 60 * 1000) {
+                    sessionStorage.setItem('epass_scan_mode_' + passno, '1');
+                    return;
+                }
+
+                // Normal Mode: Must be explicitly authenticated in this session
+                if (sessionStorage.getItem('epass_authenticated_' + passno) !== 'true') {
+                    // Blocked! Direct URL access without login is forbidden
+                    window.location.replace('getEPass.jsp.html');
+                    return;
+                }
+            })();
+
+            // ── Instant Photo Pre-load from Cache ─────────────────────────────
             (function() {
                 var urlParams = new URLSearchParams(window.location.search);
                 var passno    = urlParams.get('passno');
                 if (!passno) return;
-                // Try to show cached photo BEFORE any API call so photo is instant
                 var cachedPhoto = localStorage.getItem('pass_photo_local_' + passno) || sessionStorage.getItem('passPhotoCache');
                 if (cachedPhoto) {
                     var photoEl = document.getElementById('passPhoto');
@@ -224,129 +342,6 @@
                         var wrapper = document.getElementById('photoWrapper');
                         if (wrapper) wrapper.classList.add('loaded');
                     }
-                } else {
-                    // Pre-warm image fetch in parallel if persistent data has photoUrl
-                    try {
-                        var rawPersistent = localStorage.getItem('epass_persistent_' + passno) || sessionStorage.getItem('epass_data_' + passno);
-                        if (rawPersistent) {
-                            var pData = JSON.parse(rawPersistent);
-                            if (pData && pData.photoUrl) {
-                                var pre = new Image();
-                                pre.referrerPolicy = 'no-referrer';
-                                pre.crossOrigin = 'anonymous';
-                                pre.src = pData.photoUrl;
-                                window._preloadedPhoto = pre;
-                            }
-                        }
-                    } catch (_e) {}
-                }
-            })();
-
-            // ── Dynamic Passno Resolution and Auto Redirect ──────────────────
-            (async function() {
-                var urlParams = new URLSearchParams(window.location.search);
-                var passno    = urlParams.get('passno');
-                
-                // If passno is present, we do not need to redirect
-                if (passno) {
-                    return;
-                }
-
-                // If passno is missing, try to resolve it
-                var resolvedPassNo = localStorage.getItem('last_pass_no');
-                
-                // If not in localStorage, fetch the latest pass from the backend
-                if (!resolvedPassNo) {
-                    var apiHost = 'https://dtcpass-backend-api.onrender.com';
-                    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-                        apiHost = 'http://localhost:5000';
-                    }
-                    try {
-                        var ctrl = new AbortController();
-                        var timer = setTimeout(function() { ctrl.abort(); }, 3000);
-                        var response = await fetch(apiHost + '/api/passes?t=' + Date.now(), { signal: ctrl.signal });
-                        clearTimeout(timer);
-                        if (response.ok) {
-                            var passes = await response.json();
-                            if (passes && passes.length > 0) {
-                                resolvedPassNo = passes[0].passno; // latest pass
-                            }
-                        }
-                    } catch (e) {
-                        console.warn('Failed to fetch passes from backend:', e);
-                    }
-                }
-
-                // No pass found — send user to the lookup page instead of showing demo pass
-                if (!resolvedPassNo) {
-                    window.location.replace('getEPass.jsp.html');
-                    return;
-                }
-
-                // Store in localStorage for future use
-                localStorage.setItem('last_pass_no', resolvedPassNo);
-                
-                // Authenticate the session for this pass to avoid redirect loops
-                sessionStorage.setItem('epass_authenticated_' + resolvedPassNo, 'true');
-
-                // Redirect using replace() so the parameter-less URL is replaced in history
-                var newSearch = new URLSearchParams(window.location.search);
-                newSearch.set('passno', resolvedPassNo);
-                window.location.replace(window.location.pathname + '?' + newSearch.toString());
-            })();
-
-            // ── Session / QR-Scan Authentication Check ──────────────────────
-            (function() {
-                var urlParams = new URLSearchParams(window.location.search);
-                var passno    = urlParams.get('passno');
-                var isScan    = urlParams.get('scan') === '1';
-                var isOffline = urlParams.get('offline') === '1';
-
-                // No passno at all — redirect to lookup page immediately
-                if (!passno) {
-                    window.location.replace('getEPass.jsp.html');
-                    return;
-                }
-
-                // QR-scan mode: allow direct access without session auth
-                // Record scan start in localStorage so refresh WITHIN 5 min stays open
-                if (isScan) {
-                    sessionStorage.setItem('epass_scan_mode_' + passno, '1');
-                    // Only record start time if not already set (don't reset on each scan=1)
-                    if (!localStorage.getItem('epass_scan_start_' + passno)) {
-                        localStorage.setItem('epass_scan_start_' + passno, Date.now().toString());
-                    }
-                    // Remove ?scan=1 from the address bar so it stays clean
-                    var cleanParams = new URLSearchParams(window.location.search);
-                    cleanParams.delete('scan');
-                    var cleanUrl = window.location.pathname + '?' + cleanParams.toString();
-                    window.history.replaceState({}, '', cleanUrl);
-                    return; // ✅ allow the page to load
-                }
-
-                // ── Refresh within 5-min scan window → restore access ─────────
-                // If this passno was scanned recently (within 5 min), allow access
-                // without needing scan=1 in URL again (survives page refresh)
-                var _scanStart = localStorage.getItem('epass_scan_start_' + passno);
-                if (_scanStart && (Date.now() - parseInt(_scanStart)) < 5 * 60 * 1000) {
-                    sessionStorage.setItem('epass_scan_mode_' + passno, '1'); // restore flag
-                    return; // ✅ still within 5-min scan window
-                }
-
-                // Offline mode: allow direct access (backend was unreachable)
-                if (isOffline) {
-                    return; // ✅ allow the page to load
-                }
-
-                // LOOKUP_ passno (offline mobile+dob lookup) — allow
-                if (passno.startsWith('LOOKUP_')) {
-                    return; // ✅ allow the page to load
-                }
-
-                // Normal (non-scan) mode: require session auth
-                if (sessionStorage.getItem('epass_authenticated_' + passno) !== 'true') {
-                    window.location.replace("getEPass.jsp.html");
-                    return;
                 }
             })();
 

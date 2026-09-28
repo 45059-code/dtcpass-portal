@@ -648,17 +648,18 @@
 	// Clear pass sessions only on fresh initial page load (not bfcache restores).
 	// IMPORTANT: Do NOT clear if we just set an epass_authenticated_ key (i.e., navigating to viewEBPass).
 	window.addEventListener('pageshow', function(e) {
-		// Unconditionally clear e-pass authentication and session keys to prevent automatic redirects on refresh or history navigation
+		// Unconditionally clear e-pass authentication, session keys, and local references
 		var keysToRemove = [];
 		for (var i = 0; i < sessionStorage.length; i++) {
 			var k = sessionStorage.key(i);
-			if (k && (k.startsWith('epass_authenticated_') || k.startsWith('pass_session_') || k.startsWith('epass_scan_mode_') || k.startsWith('epass_data_'))) {
+			if (k && (k.startsWith('epass_') || k.startsWith('pass_'))) {
 				keysToRemove.push(k);
 			}
 		}
 		keysToRemove.forEach(function(k) {
 			sessionStorage.removeItem(k);
 		});
+		localStorage.removeItem('last_pass_no');
 
 		// Reset all inputs in the form
 		var form = document.getElementById('formSubmission');
