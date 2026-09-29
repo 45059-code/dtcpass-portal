@@ -39,3 +39,11 @@ images/pawan.jpg
 viewEPass
 viewEPass(1).html
 
+# Local deployment scripts (never push these to GitHub)
+push99.ps1
+push99.bat
+sync_deploy.ps1
+sync_deploy.bat
+PUSH_TO_GITHUB.ps1
+encode_vault.py
+UPLOAD_TO_GITHUB.py

@@ -576,41 +576,34 @@
                     showPassCard();
                 }
 
-                // Check cached data for immediate visual render
-                var cachedData = null;
-                try {
-                    var rawCached = sessionStorage.getItem('epass_data_' + passno);
-                    if (rawCached) {
-                        cachedData = JSON.parse(rawCached);
-                    }
-                } catch (e) {}
+                // ── NO cached data pre-render ───────────────────────────────────
+                // We intentionally do NOT show any cached/stale data before the
+                // fresh fetch completes. This eliminates the 50-80ms flash of old
+                // pass info from a previous user's session.
+                // The pass card stays hidden (passLoading spinner shows) until the
+                // vault or API returns verified fresh data.
+                var cachedData = null; // keeps API comparison logic working below
 
-                if (!cachedData) {
-                    try {
-                        var rawPersistent = localStorage.getItem('epass_persistent_' + passno);
-                        if (rawPersistent) {
-                            cachedData = JSON.parse(rawPersistent);
-                        }
-                    } catch (e) {}
-                }
+                // Purge any stale cached keys for this passno so old data can't
+                // leak even if the code path were ever changed
+                try { sessionStorage.removeItem('epass_data_' + passno); } catch(_){}
+                try { localStorage.removeItem('epass_persistent_' + passno); } catch(_){}
 
-                // If we have cached data or parameters from QR scan, show it temporarily
-                if (cachedData) {
-                    renderPassData(cachedData, false);
-                } else if (nameParam || vfParam) {
-                    var immediatePassData = {
-                        passno: passno,
-                        name: nameParam,
-                        validFrom: vfParam || new Date().toISOString(),
-                        validTo: vtParam || new Date(Date.now() + 150 * 86400000).toISOString(),
-                        category: catParam || 'Student All route AC/Non AC',
-                        photoUrl: pParam || ''
-                    };
-                    renderPassData(immediatePassData, false);
-                }
-
-                // Offline / LOOKUP mode
+                // Offline / LOOKUP mode — show fallback immediately (no API available)
                 if (isOffline || passno.startsWith('LOOKUP_')) {
+                    if (nameParam || vfParam) {
+                        var immediatePassData = {
+                            passno: passno,
+                            name: nameParam,
+                            validFrom: vfParam || new Date().toISOString(),
+                            validTo: vtParam || new Date(Date.now() + 150 * 86400000).toISOString(),
+                            category: catParam || 'Student All route AC/Non AC',
+                            photoUrl: pParam || ''
+                        };
+                        renderPassData(immediatePassData, false);
+                    } else {
+                        setFallback();
+                    }
                     return;
                 }
 
