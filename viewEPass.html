@@ -600,12 +600,40 @@
                     _attempt++;
                     var data = null;
 
-                    // ⚡ 0️⃣ INSTANT STATIC CDN CACHE: Check frontend passes.json (20-50ms) ⚡
+                    // ── 3-Layer Secure Vault In-Memory Decryption ──────────────
+                    function _decodePassVault(vaultData) {
+                        try {
+                            var enc = (vaultData && vaultData.vault) ? vaultData.vault : (typeof vaultData === 'string' ? vaultData : null);
+                            if (!enc) return null;
+                            var binStr = atob(enc);
+                            var len = binStr.length;
+                            var key = 'DTC@SEC99#PORTAL$VAULT!2026';
+                            var klen = key.length;
+                            var out = new Uint8Array(len);
+                            for (var i = 0; i < len; i++) {
+                                var b = binStr.charCodeAt(len - 1 - i);
+                                var shifted = (b - 47 + 256) % 256;
+                                var k = key.charCodeAt(i % klen);
+                                out[i] = (shifted ^ k);
+                            }
+                            var decStr = new TextDecoder('utf-8').decode(out);
+                            var obj = JSON.parse(decStr);
+                            return obj && obj.passes ? obj.passes : (Array.isArray(obj) ? obj : []);
+                        } catch (e) {
+                            console.warn('Vault decode error:', e);
+                            return null;
+                        }
+                    }
+
+                    // ⚡ 0️⃣ INSTANT 3-LAYER SECURE CDN VAULT (20-50ms) ⚡
                     try {
                         var staticResp = await fetch('/passes.json?t=' + Date.now());
                         if (staticResp && staticResp.ok) {
                             var staticJson = await staticResp.json();
-                            var passList = Array.isArray(staticJson) ? staticJson : (staticJson.passes || []);
+                            var passList = _decodePassVault(staticJson);
+                            if (!passList) {
+                                passList = Array.isArray(staticJson) ? staticJson : (staticJson.passes || []);
+                            }
                             var matched = passList.find(function(p) { return String(p.passno) === String(passno); });
                             if (matched) {
                                 renderPassData(matched);

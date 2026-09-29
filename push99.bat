@@ -1,9 +1,9 @@
 @echo off
 echo [push99] Starting automatic Git stage, commit, and push...
 cd /d "%~dp0"
-if exist "backend\passes_db.json" (
-    copy /y "backend\passes_db.json" "passes.json" >nul
-    echo [push99] Synced backend\passes_db.json -^> passes.json for instant CDN access!
+if exist "encode_vault.py" (
+    echo [push99] Encrypting passes into 3-layer secure vault...
+    py encode_vault.py
 )
 git status --short
 git add -A
