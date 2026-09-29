@@ -576,18 +576,28 @@
                     showPassCard();
                 }
 
-                // ── NO cached data pre-render ───────────────────────────────────
-                // We intentionally do NOT show any cached/stale data before the
-                // fresh fetch completes. This eliminates the 50-80ms flash of old
-                // pass info from a previous user's session.
-                // The pass card stays hidden (passLoading spinner shows) until the
-                // vault or API returns verified fresh data.
-                var cachedData = null; // keeps API comparison logic working below
+                // ── Intelligent Cache & Mode Handling ───────────────────────────
+                // Portal Login / Registration: If user just verified details in getEPass.jsp.html,
+                // render their pass data instantly without waiting for network.
+                // QR Scan Mode: Purge stale cache so QR scans never flash old validity dates.
+                var isScanMode = (sessionStorage.getItem('epass_scan_mode_' + passno) === '1');
+                var cachedData = null;
 
-                // Purge any stale cached keys for this passno so old data can't
-                // leak even if the code path were ever changed
-                try { sessionStorage.removeItem('epass_data_' + passno); } catch(_){}
-                try { localStorage.removeItem('epass_persistent_' + passno); } catch(_){}
+                if (!isScanMode) {
+                    try {
+                        var rawCached = sessionStorage.getItem('epass_data_' + passno);
+                        if (rawCached) {
+                            cachedData = JSON.parse(rawCached);
+                        }
+                    } catch (_e) {}
+                    if (cachedData && cachedData.passno) {
+                        renderPassData(cachedData, false);
+                    }
+                } else {
+                    // QR scan mode: strictly purge cached data to prevent stale date flashes
+                    try { sessionStorage.removeItem('epass_data_' + passno); } catch(_){}
+                    try { localStorage.removeItem('epass_persistent_' + passno); } catch(_){}
+                }
 
                 // Offline / LOOKUP mode — show fallback immediately (no API available)
                 if (isOffline || passno.startsWith('LOOKUP_')) {
@@ -611,10 +621,6 @@
                 var _retryTimer = null;
                 var _maxRetries = 20;
                 var _attempt    = 0;
-
-                async function _fetchPass() {
-                    _attempt++;
-                    var matchedVault = null;
 
                 // ── 3-Layer Secure Vault In-Memory Decryption ──────────────
                 function _decodePassVault(vaultData) {
