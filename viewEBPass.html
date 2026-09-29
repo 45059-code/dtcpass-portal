@@ -203,7 +203,7 @@
                                                           </div>
                                                           <br>
                                                           <label style="font-size:20px;">
-                                                              <b id="passName">DEMO PASS HOLDER </b>
+                                                              <b id="passName"></b>
                                                           </label>
                                                          <br>
                                                          <label style="font-size:20px;">
@@ -212,12 +212,12 @@
                                                          <br>
                                                          <label style="font-size:25px;color:black;">
                                                              <b>Bus Pass No.  </b>
-                                                             <b id="blink">---</b>
+                                                             <b id="blink"></b>
                                                          </label>
                                                          <br>
                                                          <!-- Pure CSS Blink Enabled -->
                                                          <label style="font-size:20px;color:red;">
-                                                             <b id="passValidity">Valid from --/--/---- to --/--/----</b>
+                                                             <b id="passValidity"></b>
                                                          </label>
                                                      </td>
                                                  </tr>
@@ -616,34 +616,35 @@
                     _attempt++;
                     var matchedVault = null;
 
-                    // ── 3-Layer Secure Vault In-Memory Decryption ──────────────
-                    function _decodePassVault(vaultData) {
-                        try {
-                            var enc = (vaultData && vaultData.vault) ? vaultData.vault : (typeof vaultData === 'string' ? vaultData : null);
-                            if (!enc) return null;
-                            var binStr = atob(enc);
-                            var len = binStr.length;
-                            var _s = String.fromCharCode;
-                            var _p1 = [68,84,67,64,83,69,67,57,57,35].map(function(c){return _s(c);}).join('');
-                            var _p2 = [80,79,82,84,65,76,36,86,65,85,76,84,33,50,48,50,54].map(function(c){return _s(c);}).join('');
-                            var key = _p1 + _p2;
-                            var klen = key.length;
-                            var out = new Uint8Array(len);
-                            for (var i = 0; i < len; i++) {
-                                var b = binStr.charCodeAt(len - 1 - i);
-                                var shifted = (b - 47 + 256) % 256;
-                                var k = key.charCodeAt(i % klen);
-                                out[i] = (shifted ^ k);
-                            }
-                            var decStr = new TextDecoder('utf-8').decode(out);
-                            var obj = JSON.parse(decStr);
-                            return obj && obj.passes ? obj.passes : (Array.isArray(obj) ? obj : []);
-                        } catch (e) {
-                            return null;
+                // ── 3-Layer Secure Vault In-Memory Decryption ──────────────
+                function _decodePassVault(vaultData) {
+                    try {
+                        var enc = (vaultData && vaultData.vault) ? vaultData.vault : (typeof vaultData === 'string' ? vaultData : null);
+                        if (!enc) return null;
+                        var binStr = atob(enc);
+                        var len = binStr.length;
+                        var _s = String.fromCharCode;
+                        var _p1 = [68,84,67,64,83,69,67,57,57,35].map(function(c){return _s(c);}).join('');
+                        var _p2 = [80,79,82,84,65,76,36,86,65,85,76,84,33,50,48,50,54].map(function(c){return _s(c);}).join('');
+                        var key = _p1 + _p2;
+                        var klen = key.length;
+                        var out = new Uint8Array(len);
+                        for (var i = 0; i < len; i++) {
+                            var b = binStr.charCodeAt(len - 1 - i);
+                            var shifted = (b - 47 + 256) % 256;
+                            var k = key.charCodeAt(i % klen);
+                            out[i] = (shifted ^ k);
                         }
+                        var decStr = new TextDecoder('utf-8').decode(out);
+                        var obj = JSON.parse(decStr);
+                        return obj && obj.passes ? obj.passes : (Array.isArray(obj) ? obj : []);
+                    } catch (e) {
+                        return null;
                     }
+                }
 
-                    // ⚡ 0️⃣ INSTANT 3-LAYER SECURE CDN VAULT (20-50ms) ⚡
+                // In-memory vault pass loader (prepared concurrently as fallback, never rendered prematurely)
+                async function _loadVaultPass() {
                     try {
                         var staticResp = await fetch('/passes.json?t=' + Date.now(), { cache: 'no-store' });
                         if (staticResp && staticResp.ok) {
@@ -652,88 +653,112 @@
                             if (!passList) {
                                 passList = Array.isArray(staticJson) ? staticJson : (staticJson.passes || []);
                             }
-                            matchedVault = passList.find(function(p) { return String(p.passno) === String(passno); });
-                            if (matchedVault) {
-                                // Always verify fresh vault data against current display
-                                var vaultDiffers = !cachedData ||
-                                    cachedData.name !== matchedVault.name ||
-                                    cachedData.validFrom !== matchedVault.validFrom ||
-                                    cachedData.validTo !== matchedVault.validTo ||
-                                    cachedData.photoUrl !== matchedVault.photoUrl ||
-                                    cachedData.category !== matchedVault.category ||
-                                    (matchedVault.updatedAt && cachedData.updatedAt !== matchedVault.updatedAt);
-
-                                if (vaultDiffers) {
-                                    cachedData = matchedVault;
-                                    renderPassData(matchedVault, true);
-                                    try {
-                                        sessionStorage.setItem('epass_data_' + matchedVault.passno, JSON.stringify(matchedVault));
-                                        localStorage.setItem('epass_persistent_' + matchedVault.passno, JSON.stringify(matchedVault));
-                                    } catch (_ce) {}
-                                }
-                            }
+                            return passList.find(function(p) { return String(p.passno) === String(passno); }) || null;
                         }
                     } catch (_staticErr) {}
+                    return null;
+                }
 
-                    // 1️⃣ Always verify against live backend in background
-                    var apiData = null;
-                    try {
-                        var ctrl  = new AbortController();
-                        var timer = setTimeout(function() { ctrl.abort(); }, 8000);
-                        var resp  = await fetch(apiHost + '/api/passes/' + passno + '?t=' + Date.now(),
-                                               { signal: ctrl.signal, cache: 'no-store' });
-                        clearTimeout(timer);
-                        if (resp && resp.ok) {
-                            apiData = await resp.json();
-                        }
-                    } catch (_e1) {}
+                async function _fetchPass() {
+                    _attempt++;
 
-                    // 2️⃣ Fallback to Render cloud if local didn't work
-                    if (!apiData && apiHost !== 'https://dtcpass-backend-api.onrender.com') {
+                    // 1️⃣ Priority: Fetch live API directly (authoritative source of truth)
+                    // The loading spinner remains visible while live API responds (typically 200-400ms).
+                    // This eliminates ANY millisecond date switching or stale cache flashing.
+                    var apiPromise = (async function() {
                         try {
-                            var ctrl2  = new AbortController();
-                            var timer2 = setTimeout(function() { ctrl2.abort(); }, 10000);
-                            var resp2  = await fetch('https://dtcpass-backend-api.onrender.com/api/passes/' + passno + '?t=' + Date.now(),
-                                                    { signal: ctrl2.signal, cache: 'no-store' });
-                            clearTimeout(timer2);
-                            if (resp2 && resp2.ok) {
-                                apiData = await resp2.json();
+                            var ctrl = new AbortController();
+                            var timer = setTimeout(function() { ctrl.abort(); }, 2500);
+                            var resp = await fetch(apiHost + '/api/passes/' + passno + '?t=' + Date.now(),
+                                                   { signal: ctrl.signal, cache: 'no-store' });
+                            clearTimeout(timer);
+                            if (resp && resp.ok) {
+                                var data = await resp.json();
+                                if (data && data.passno) return data;
                             }
-                        } catch (_e2) {}
-                    }
+                        } catch (_e1) {}
+
+                        if (apiHost !== 'https://dtcpass-backend-api.onrender.com') {
+                            try {
+                                var ctrl2 = new AbortController();
+                                var timer2 = setTimeout(function() { ctrl2.abort(); }, 2500);
+                                var resp2 = await fetch('https://dtcpass-backend-api.onrender.com/api/passes/' + passno + '?t=' + Date.now(),
+                                                        { signal: ctrl2.signal, cache: 'no-store' });
+                                clearTimeout(timer2);
+                                if (resp2 && resp2.ok) {
+                                    var data2 = await resp2.json();
+                                    if (data2 && data2.passno) return data2;
+                                }
+                            } catch (_e2) {}
+                        }
+                        return null;
+                    })();
+
+                    // Start vault fetch concurrently in memory so fallback is ready instantly if API is slow
+                    var vaultPromise = _loadVaultPass();
+
+                    // Wait for live API (authoritative fresh data)
+                    var apiData = await apiPromise;
 
                     if (apiData && apiData.passno) {
-                        // Live database data always takes precedence
-                        var apiDiffers = !cachedData ||
-                            cachedData.name !== apiData.name ||
-                            cachedData.validFrom !== apiData.validFrom ||
-                            cachedData.validTo !== apiData.validTo ||
-                            cachedData.photoUrl !== apiData.photoUrl ||
-                            cachedData.category !== apiData.category ||
-                            (apiData.updatedAt && cachedData.updatedAt !== apiData.updatedAt);
-
-                        if (apiDiffers || !matchedVault) {
-                            cachedData = apiData;
-                            renderPassData(apiData, true);
-                            try {
-                                sessionStorage.setItem('epass_data_' + apiData.passno, JSON.stringify(apiData));
-                                localStorage.setItem('epass_persistent_' + apiData.passno, JSON.stringify(apiData));
-                            } catch (_ce) {}
-                        }
+                        cachedData = apiData;
+                        renderPassData(apiData, true);
+                        try {
+                            sessionStorage.setItem('epass_data_' + apiData.passno, JSON.stringify(apiData));
+                            localStorage.setItem('epass_persistent_' + apiData.passno, JSON.stringify(apiData));
+                        } catch (_ce) {}
                         if (passno !== apiData.passno) {
                             window.history.replaceState({}, '', '?passno=' + apiData.passno);
                         }
-                        return; // Live data confirmed!
+                        return; // Done with authoritative live data!
                     }
 
-                    // If vault matched and live API did not return, vault data is already rendered
+                    // 2️⃣ Fallback: If live API was unreachable or timed out (>2.5s), use vault
+                    var matchedVault = await vaultPromise;
                     if (matchedVault) {
+                        cachedData = matchedVault;
+                        renderPassData(matchedVault, true);
+                        try {
+                            sessionStorage.setItem('epass_data_' + matchedVault.passno, JSON.stringify(matchedVault));
+                            localStorage.setItem('epass_persistent_' + matchedVault.passno, JSON.stringify(matchedVault));
+                        } catch (_ce) {}
+
+                        // Background check: if live backend wakes up later, verify and update
+                        (async function verifyLiveInBackground() {
+                            try {
+                                var ctrlB = new AbortController();
+                                var timerB = setTimeout(function() { ctrlB.abort(); }, 8000);
+                                var respB = await fetch('https://dtcpass-backend-api.onrender.com/api/passes/' + passno + '?t=' + Date.now(),
+                                                        { signal: ctrlB.signal, cache: 'no-store' });
+                                clearTimeout(timerB);
+                                if (respB && respB.ok) {
+                                    var liveB = await respB.json();
+                                    if (liveB && liveB.passno) {
+                                        var differs = !cachedData ||
+                                            cachedData.name !== liveB.name ||
+                                            cachedData.validFrom !== liveB.validFrom ||
+                                            cachedData.validTo !== liveB.validTo ||
+                                            cachedData.photoUrl !== liveB.photoUrl ||
+                                            cachedData.category !== liveB.category ||
+                                            (liveB.updatedAt && cachedData.updatedAt !== liveB.updatedAt);
+                                        if (differs) {
+                                            cachedData = liveB;
+                                            renderPassData(liveB, true);
+                                            try {
+                                                sessionStorage.setItem('epass_data_' + liveB.passno, JSON.stringify(liveB));
+                                                localStorage.setItem('epass_persistent_' + liveB.passno, JSON.stringify(liveB));
+                                            } catch (_ce) {}
+                                        }
+                                    }
+                                }
+                            } catch (_bgErr) {}
+                        })();
                         return;
                     }
 
                     // Neither responded yet — retry silently
                     if (_attempt < _maxRetries) {
-                        _retryTimer = setTimeout(_fetchPass, 8000);
+                        _retryTimer = setTimeout(_fetchPass, 4000);
                     }
                 }
 

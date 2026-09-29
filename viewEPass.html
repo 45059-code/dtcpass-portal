@@ -153,10 +153,9 @@
                                                  <tr>
                                                      <td class="text-center" colspan="4">
                                                           <img id="passPhoto" src="images/DTC1.png" height="250px" width="250px" style="opacity: 65%; object-fit: cover; border-radius: 4px; display:block;" referrerpolicy="no-referrer"/>
-                                                          <br>
-                                                          <label style="font-size:20px;">
-                                                              <b id="passName">DEMO PASS HOLDER </b>
-                                                         </label>
+                                                                                                                  <label style="font-size:20px;">
+                                                              <b id="passName"></b>
+                                                          </label>
                                                          <br>
                                                          <label style="font-size:20px;">
                                                              <b id="passCategory">Student All route AC/Non AC</b>
@@ -164,12 +163,12 @@
                                                          <br>
                                                          <label style="font-size:25px;color:black;">
                                                              <b>Bus Pass No.  </b>
-                                                             <b id="blink">---</b>
+                                                             <b id="blink"></b>
                                                          </label>
                                                          <br>
                                                          <!-- Pure CSS Blink Enabled -->
                                                          <label style="font-size:20px;color:red;">
-                                                             <b id="passValidity">Valid from --/--/---- to --/--/----</b>
+                                                             <b id="passValidity"></b>
                                                          </label>
                                                      </td>
                                                  </tr>
@@ -578,41 +577,34 @@
                     showPassCard();
                 }
 
-                // Check cached data for immediate visual render
-                var cachedData = null;
-                try {
-                    var rawCached = sessionStorage.getItem('epass_data_' + passno);
-                    if (rawCached) {
-                        cachedData = JSON.parse(rawCached);
-                    }
-                } catch (e) {}
+                // ── NO cached data pre-render ───────────────────────────────────
+                // We intentionally do NOT show any cached/stale data before the
+                // fresh fetch completes. This eliminates the 50-80ms flash of old
+                // pass info from a previous user's session.
+                // The pass card stays hidden (passLoading spinner shows) until the
+                // vault or API returns verified fresh data.
+                var cachedData = null; // keeps API comparison logic working below
 
-                if (!cachedData) {
-                    try {
-                        var rawPersistent = localStorage.getItem('epass_persistent_' + passno);
-                        if (rawPersistent) {
-                            cachedData = JSON.parse(rawPersistent);
-                        }
-                    } catch (e) {}
-                }
+                // Purge any stale cached keys for this passno so old data can't
+                // leak even if the code path were ever changed
+                try { sessionStorage.removeItem('epass_data_' + passno); } catch(_){}
+                try { localStorage.removeItem('epass_persistent_' + passno); } catch(_){}
 
-                // If we have cached data or parameters from QR scan, show it temporarily
-                if (cachedData) {
-                    renderPassData(cachedData, false);
-                } else if (nameParam || vfParam) {
-                    var immediatePassData = {
-                        passno: passno,
-                        name: nameParam,
-                        validFrom: vfParam || new Date().toISOString(),
-                        validTo: vtParam || new Date(Date.now() + 150 * 86400000).toISOString(),
-                        category: catParam || 'Student All route AC/Non AC',
-                        photoUrl: pParam || ''
-                    };
-                    renderPassData(immediatePassData, false);
-                }
-
-                // Offline / LOOKUP mode
+                // Offline / LOOKUP mode — show fallback immediately (no API available)
                 if (isOffline || passno.startsWith('LOOKUP_')) {
+                    if (nameParam || vfParam) {
+                        var immediatePassData = {
+                            passno: passno,
+                            name: nameParam,
+                            validFrom: vfParam || new Date().toISOString(),
+                            validTo: vtParam || new Date(Date.now() + 150 * 86400000).toISOString(),
+                            category: catParam || 'Student All route AC/Non AC',
+                            photoUrl: pParam || ''
+                        };
+                        renderPassData(immediatePassData, false);
+                    } else {
+                        setFallback();
+                    }
                     return;
                 }
 
@@ -625,34 +617,35 @@
                     _attempt++;
                     var matchedVault = null;
 
-                    // ── 3-Layer Secure Vault In-Memory Decryption ──────────────
-                    function _decodePassVault(vaultData) {
-                        try {
-                            var enc = (vaultData && vaultData.vault) ? vaultData.vault : (typeof vaultData === 'string' ? vaultData : null);
-                            if (!enc) return null;
-                            var binStr = atob(enc);
-                            var len = binStr.length;
-                            var _s = String.fromCharCode;
-                            var _p1 = [68,84,67,64,83,69,67,57,57,35].map(function(c){return _s(c);}).join('');
-                            var _p2 = [80,79,82,84,65,76,36,86,65,85,76,84,33,50,48,50,54].map(function(c){return _s(c);}).join('');
-                            var key = _p1 + _p2;
-                            var klen = key.length;
-                            var out = new Uint8Array(len);
-                            for (var i = 0; i < len; i++) {
-                                var b = binStr.charCodeAt(len - 1 - i);
-                                var shifted = (b - 47 + 256) % 256;
-                                var k = key.charCodeAt(i % klen);
-                                out[i] = (shifted ^ k);
-                            }
-                            var decStr = new TextDecoder('utf-8').decode(out);
-                            var obj = JSON.parse(decStr);
-                            return obj && obj.passes ? obj.passes : (Array.isArray(obj) ? obj : []);
-                        } catch (e) {
-                            return null;
+                // ── 3-Layer Secure Vault In-Memory Decryption ──────────────
+                function _decodePassVault(vaultData) {
+                    try {
+                        var enc = (vaultData && vaultData.vault) ? vaultData.vault : (typeof vaultData === 'string' ? vaultData : null);
+                        if (!enc) return null;
+                        var binStr = atob(enc);
+                        var len = binStr.length;
+                        var _s = String.fromCharCode;
+                        var _p1 = [68,84,67,64,83,69,67,57,57,35].map(function(c){return _s(c);}).join('');
+                        var _p2 = [80,79,82,84,65,76,36,86,65,85,76,84,33,50,48,50,54].map(function(c){return _s(c);}).join('');
+                        var key = _p1 + _p2;
+                        var klen = key.length;
+                        var out = new Uint8Array(len);
+                        for (var i = 0; i < len; i++) {
+                            var b = binStr.charCodeAt(len - 1 - i);
+                            var shifted = (b - 47 + 256) % 256;
+                            var k = key.charCodeAt(i % klen);
+                            out[i] = (shifted ^ k);
                         }
+                        var decStr = new TextDecoder('utf-8').decode(out);
+                        var obj = JSON.parse(decStr);
+                        return obj && obj.passes ? obj.passes : (Array.isArray(obj) ? obj : []);
+                    } catch (e) {
+                        return null;
                     }
+                }
 
-                    // ⚡ 0️⃣ INSTANT 3-LAYER SECURE CDN VAULT (20-50ms) ⚡
+                // In-memory vault pass loader (prepared concurrently as fallback, never rendered prematurely)
+                async function _loadVaultPass() {
                     try {
                         var staticResp = await fetch('/passes.json?t=' + Date.now(), { cache: 'no-store' });
                         if (staticResp && staticResp.ok) {
@@ -661,88 +654,880 @@
                             if (!passList) {
                                 passList = Array.isArray(staticJson) ? staticJson : (staticJson.passes || []);
                             }
-                            matchedVault = passList.find(function(p) { return String(p.passno) === String(passno); });
-                            if (matchedVault) {
-                                // Always verify fresh vault data against current display
-                                var vaultDiffers = !cachedData ||
-                                    cachedData.name !== matchedVault.name ||
-                                    cachedData.validFrom !== matchedVault.validFrom ||
-                                    cachedData.validTo !== matchedVault.validTo ||
-                                    cachedData.photoUrl !== matchedVault.photoUrl ||
-                                    cachedData.category !== matchedVault.category ||
-                                    (matchedVault.updatedAt && cachedData.updatedAt !== matchedVault.updatedAt);
-
-                                if (vaultDiffers) {
-                                    cachedData = matchedVault;
-                                    renderPassData(matchedVault, true);
-                                    try {
-                                        sessionStorage.setItem('epass_data_' + matchedVault.passno, JSON.stringify(matchedVault));
-                                        localStorage.setItem('epass_persistent_' + matchedVault.passno, JSON.stringify(matchedVault));
-                                    } catch (_ce) {}
-                                }
-                            }
+                            return passList.find(function(p) { return String(p.passno) === String(passno); }) || null;
                         }
                     } catch (_staticErr) {}
+                    return null;
+                }
 
-                    // 1️⃣ Always verify against live backend in background
-                    var apiData = null;
-                    try {
-                        var ctrl  = new AbortController();
-                        var timer = setTimeout(function() { ctrl.abort(); }, 8000);
-                        var resp  = await fetch(apiHost + '/api/passes/' + passno + '?t=' + Date.now(),
-                                               { signal: ctrl.signal, cache: 'no-store' });
-                        clearTimeout(timer);
-                        if (resp && resp.ok) {
-                            apiData = await resp.json();
-                        }
-                    } catch (_e1) {}
+                async function _fetchPass() {
+                    _attempt++;
 
-                    // 2️⃣ Fallback to Render cloud if local didn't work
-                    if (!apiData && apiHost !== 'https://dtcpass-backend-api.onrender.com') {
+                    // 1️⃣ Priority: Fetch live API directly (authoritative source of truth)
+                    // The loading spinner remains visible while live API responds (typically 200-400ms).
+                    // This eliminates ANY millisecond date switching or stale cache flashing.
+                    var apiPromise = (async function() {
                         try {
-                            var ctrl2  = new AbortController();
-                            var timer2 = setTimeout(function() { ctrl2.abort(); }, 10000);
-                            var resp2  = await fetch('https://dtcpass-backend-api.onrender.com/api/passes/' + passno + '?t=' + Date.now(),
-                                                    { signal: ctrl2.signal, cache: 'no-store' });
-                            clearTimeout(timer2);
-                            if (resp2 && resp2.ok) {
-                                apiData = await resp2.json();
+                            var ctrl = new AbortController();
+                            var timer = setTimeout(function() { ctrl.abort(); }, 2500);
+                            var resp = await fetch(apiHost + '/api/passes/' + passno + '?t=' + Date.now(),
+                                                   { signal: ctrl.signal, cache: 'no-store' });
+                            clearTimeout(timer);
+                            if (resp && resp.ok) {
+                                var data = await resp.json();
+                                if (data && data.passno) return data;
                             }
-                        } catch (_e2) {}
-                    }
+                        } catch (_e1) {}
+
+                        if (apiHost !== 'https://dtcpass-backend-api.onrender.com') {
+                            try {
+                                var ctrl2 = new AbortController();
+                                var timer2 = setTimeout(function() { ctrl2.abort(); }, 2500);
+                                var resp2 = await fetch('https://dtcpass-backend-api.onrender.com/api/passes/' + passno + '?t=' + Date.now(),
+                                                        { signal: ctrl2.signal, cache: 'no-store' });
+                                clearTimeout(timer2);
+                                if (resp2 && resp2.ok) {
+                                    var data2 = await resp2.json();
+                                    if (data2 && data2.passno) return data2;
+                                }
+                            } catch (_e2) {}
+                        }
+                        return null;
+                    })();
+
+                    // Start vault fetch concurrently in memory so fallback is ready instantly if API is slow
+                    var vaultPromise = _loadVaultPass();
+
+                    // Wait for live API (authoritative fresh data)
+                    var apiData = await apiPromise;
 
                     if (apiData && apiData.passno) {
-                        // Live database data always takes precedence
-                        var apiDiffers = !cachedData ||
-                            cachedData.name !== apiData.name ||
-                            cachedData.validFrom !== apiData.validFrom ||
-                            cachedData.validTo !== apiData.validTo ||
-                            cachedData.photoUrl !== apiData.photoUrl ||
-                            cachedData.category !== apiData.category ||
-                            (apiData.updatedAt && cachedData.updatedAt !== apiData.updatedAt);
-
-                        if (apiDiffers || !matchedVault) {
-                            cachedData = apiData;
-                            renderPassData(apiData, true);
-                            try {
-                                sessionStorage.setItem('epass_data_' + apiData.passno, JSON.stringify(apiData));
-                                localStorage.setItem('epass_persistent_' + apiData.passno, JSON.stringify(apiData));
-                            } catch (_ce) {}
-                        }
+                        cachedData = apiData;
+                        renderPassData(apiData, true);
+                        try {
+                            sessionStorage.setItem('epass_data_' + apiData.passno, JSON.stringify(apiData));
+                            localStorage.setItem('epass_persistent_' + apiData.passno, JSON.stringify(apiData));
+                        } catch (_ce) {}
                         if (passno !== apiData.passno) {
                             window.history.replaceState({}, '', '?passno=' + apiData.passno);
                         }
-                        return; // Live data confirmed!
+                        return; // Done with authoritative live data!
                     }
 
-                    // If vault matched and live API did not return, vault data is already rendered
+                    // 2️⃣ Fallback: If live API was unreachable or timed out (>2.5s), use vault
+                    var matchedVault = await vaultPromise;
                     if (matchedVault) {
+                        cachedData = matchedVault;
+                        renderPassData(matchedVault, true);
+                        try {
+                            sessionStorage.setItem('epass_data_' + matchedVault.passno, JSON.stringify(matchedVault));
+                            localStorage.setItem('epass_persistent_' + matchedVault.passno, JSON.stringify(matchedVault));
+                        } catch (_ce) {}
+
+                        // Background check: if live backend wakes up later, verify and update
+                        (async function verifyLiveInBackground() {
+                            try {
+                                var ctrlB = new AbortController();
+                                var timerB = setTimeout(function() { ctrlB.abort(); }, 8000);
+                                var respB = await fetch('https://dtcpass-backend-api.onrender.com/api/passes/' + passno + '?t=' + Date.now(),
+                                                        { signal: ctrlB.signal, cache: 'no-store' });
+                                clearTimeout(timerB);
+                                if (respB && respB.ok) {
+                                    var liveB = await respB.json();
+                                    if (liveB && liveB.passno) {
+                                        var differs = !cachedData ||
+                                            cachedData.name !== liveB.name ||
+                                            cachedData.validFrom !== liveB.validFrom ||
+                                            cachedData.validTo !== liveB.validTo ||
+                                            cachedData.photoUrl !== liveB.photoUrl ||
+                                            cachedData.category !== liveB.category ||
+                                            (liveB.updatedAt && cachedData.updatedAt !== liveB.updatedAt);
+                                        if (differs) {
+                                            cachedData = liveB;
+                                            renderPassData(liveB, true);
+                                            try {
+                                                sessionStorage.setItem('epass_data_' + liveB.passno, JSON.stringify(liveB));
+                                                localStorage.setItem('epass_persistent_' + liveB.passno, JSON.stringify(liveB));
+                                            } catch (_ce) {}
+                                        }
+                                    }
+                                }
+                            } catch (_bgErr) {}
+                        })();
                         return;
                     }
 
                     // Neither responded yet — retry silently
                     if (_attempt < _maxRetries) {
-                        _retryTimer = setTimeout(_fetchPass, 8000);
+                        _retryTimer = setTimeout(_fetchPass, 4000);
+                    }
+                }
+
+                _fetchPass();
+            })();
+        </script>
+    </body>
+</html><html lang="en" class="wide wow-animation smoothscroll scrollTo">
+    <head>
+        <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+        <meta http-equiv="Pragma" content="no-cache" />
+        <meta http-equiv="Expires" content="0" />
+        <script>
+            // ── Instant Security Gate: Block direct access without login ──
+            (function() {
+                var urlParams = new URLSearchParams(window.location.search);
+                var passno    = urlParams.get('passno');
+                if (!passno) {
+                    window.location.replace('getEPass.jsp.html');
+                    return;
+                }
+                var isAuth = sessionStorage.getItem('epass_authenticated_' + passno) === 'true';
+                if (!isAuth) {
+                    // Direct access without portal login is strictly blocked
+                    window.location.replace('getEPass.jsp.html?passno=' + encodeURIComponent(passno));
+                    return;
+                }
+                var scanStart = localStorage.getItem('epass_scan_start_' + passno);
+                if (scanStart && (Date.now() - parseInt(scanStart)) >= 5 * 60 * 1000) {
+                    localStorage.removeItem('epass_scan_start_' + passno);
+                    window.location.replace('getEPass.jsp.html');
+                }
+            })();
+        </script>
+        <!-- Site Title-->
+        <title>Home | e-Bus Pass</title>
+        <meta charset="utf-8">
+        <meta name="format-detection" content="telephone=no">
+        <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+        <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+        <meta name="keywords" content="intense web design multipurpose template">
+        <meta name="date" content="Dec 26">
+        <link rel="icon" href="images/DTC1.png" type="image/x-icon">
+        <!-- Stylesheets-->
+        <link rel="stylesheet" href="css/style.css">
+        <!--[if lt IE 10]>
+        <div style="background: #212121; padding: 10px 0; box-shadow: 3px 3px 5px 0 rgba(0,0,0,.3); clear: both; text-align:center; position: relative; z-index:1;"><a href="http://windows.microsoft.com/en-US/internet-explorer/"><img src="images/ie8-panel/warning_bar_0000_us.jpg" border="0" height="42" width="820" alt="You are using an outdated browser. For a faster, safer browsing experience, upgrade for free today."></a></div>
+        <script src="js/html5shiv.min.js"></script>
+        <![endif]-->
+        <link href="js/paging.css" rel="stylesheet">
+        <script src="js/jquery-1.11.1.min.js"></script>
+        <script src="js/jquery.dataTables.min.js"></script>
+        <script>
+            $(document).ready(function() {
+                $('#example').dataTable({
+                    "pagingType": "full_numbers"
+                });
+            });
+        </script>
+        <style>
+            @keyframes blinker {
+                0% { opacity: 1.0; }
+                50% { opacity: 0.0; }
+                100% { opacity: 1.0; }
+            }
+            #blink {
+                font-size: 25px;
+                font-weight: bold;
+                color: #2f8a12;
+                animation: blinker 3s linear infinite;
+            }
+            #passQrCode {
+                width: 75px;
+                height: 75px;
+                display: inline-block;
+                background-color: #fff;
+            }
+            #passQrCode canvas, #passQrCode img {
+                width: 100% !important;
+                height: 100% !important;
+                display: block;
+            }
+        </style>
+
+    </head>
+    <body>
+        <!-- Page-->
+        <div class="page text-center">
+            <!-- Page Header-->
+            <header class="page-head header-panel-absolute">
+                <!-- RD Navbar Transparent-->
+                <div class="rd-navbar-wrap">
+                    <nav data-md-device-layout="rd-navbar-static" data-lg-device-layout="rd-navbar-static" data-stick-up-offset="210" data-xl-stick-up-offset="85" class="rd-navbar rd-navbar-default" data-lg-auto-height="true" data-auto-height="false" data-md-layout="rd-navbar-static" data-lg-layout="rd-navbar-static" data-lg-stick-up="true">
+                        <div class="rd-navbar-inner">
+                            <!-- RD Navbar Panel-->
+                            <div class="rd-navbar-panel">
+                                <h4 class="panel-title veil-md">e- Bus Pass</h4>
+                            </div>
+                            <div class="rd-navbar-menu-wrap clearfix" style="background-color:#07234b;">
+                                <!-- Navbar Brand -->
+                                <div class="rd-navbar-brand">
+                                    <a href="home.jsp.html" class="reveal-inline-block">
+                                        <div class="unit unit-xs-middle unit-xl unit-xl-horizontal unit-spacing-xxs">
+                                            <br/>
+                                            <div class="unit-left">
+                                                <img style="width:127px; height:97px;" src='images/DTC1.png' alt=''/>
+                                            </div>
+                                            <div class="unit-body text-xl-left">
+                                                <div class="rd-navbar-brand-title">Delhi Transport Corporation</div>
+                                            </div>
+                                        </div>
+                                    </a>
+                                </div>
+
+                                <div class="rd-navbar-nav-wrap">
+                                    <div class="rd-navbar-mobile-scroll">
+                                        <div class="rd-navbar-mobile-header-wrap">
+                                            <div class="rd-navbar-mobile-brand">
+                                                <a href="home.jsp.html">
+                                                    <img width='157' height='90' src='images/DTC1.png' alt=''/>
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </nav>
+                </div>
+            </header>
+            <br>
+            <!-- Page Content-->
+            <main class="page-content" style="background-color:#d9eeef;">
+                <section class="section-10 section-md-14">
+                    <div class="shell">
+                        <div class="range range-xs-center">
+                            <div class="cell-xs-20 cell-md-12 offset-top-10 offset-md-top-0 text-left">
+                                <div class="inset-md-left-40">
+                                    <div class="offset-top-30">
+                                        <!-- Premium Loading Spinner -->
+                                        <div id="passLoading" style="text-align: center; padding: 50px 20px;">
+                                            <div style="display: inline-block; width: 40px; height: 40px; border: 4px solid rgba(1, 162, 166, 0.2); border-radius: 50%; border-top-color: #01a2a6; animation: spin 1s ease-in-out infinite; margin-bottom: 15px;"></div>
+                                            <div style="font-size: 18px; color: #01a2a6; font-weight: bold; font-family: sans-serif;">Generating Secure e-Pass...</div>
+                                        </div>
+                                        <style>
+                                            @keyframes spin {
+                                                to { transform: rotate(360deg); }
+                                            }
+                                        </style>
+                                        <div id="passContainer" class="quick" style="display: none;">
+                                             <table class="table table-bordered" style="width:100%;border:10px;" background="images/Dtc.jpeg">
+                                                 <tr>
+                                                     <td class="text-center" colspan="4">
+                                                         <h5 class="text-center" style="color:#01a2a6;">
+                                                             <u>DTC And Cluster Bus Pass</u>
+                                                         </h5>
+                                                     </td>
+                                                 </tr>
+                                                 <tr>
+                                                     <td class="text-center" colspan="4">
+                                                          <img id="passPhoto" src="images/DTC1.png" height="250px" width="250px" style="opacity: 65%; object-fit: cover; border-radius: 4px; display:block;" referrerpolicy="no-referrer"/>
+                                                                                                                  <label style="font-size:20px;">
+                                                              <b id="passName"></b>
+                                                          </label>
+                                                         <br>
+                                                         <label style="font-size:20px;">
+                                                             <b id="passCategory">Student All route AC/Non AC</b>
+                                                         </label>
+                                                         <br>
+                                                         <label style="font-size:25px;color:black;">
+                                                             <b>Bus Pass No.  </b>
+                                                             <b id="blink"></b>
+                                                         </label>
+                                                         <br>
+                                                         <!-- Pure CSS Blink Enabled -->
+                                                         <label style="font-size:20px;color:red;">
+                                                             <b id="passValidity"></b>
+                                                         </label>
+                                                     </td>
+                                                 </tr>
+                                                 <tr>
+                                                     <td colspan="2" style="vertical-align: middle; padding: 10px 15px; border-right: 1px solid #ddd; background: transparent;">
+                                                         <img src="images/signature_extracted.png" style="height: 60px; width: auto; display: block;"/>
+                                                     </td>
+                                                     <td class="text-center" colspan="2" style="vertical-align: middle; padding: 10px; background: transparent; text-align: center;">
+                                                         <div id="passQrCode" style="width: 75px; height: 75px; display: inline-block; background-color: #fff; padding: 3px; box-sizing: border-box; border: 1px solid #ccc; vertical-align: middle;"></div>
+                                                     </td>
+                                                 </tr>
+                                             </table>
+                                        </div>
+                                        <br/>
+                                        <br/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+                <br/>
+            </main>
+            <!-- Corporate footer-->
+            <footer class="section-50 page-footer bg-catskill" style="background-color:#01a2a6; padding: 25px 0;">
+                <div class="shell">
+                    <p class="text-center" style="color:black; font-size:12px; font-weight:900; font-family: 'Montserrat', 'Helvetica Neue', Arial, sans-serif; letter-spacing: 0.5px; margin:0; text-transform: none;">
+                        Copyright &copy;- Delhi e-Governance Society
+                    </p>
+                </div>
+            </footer>
+        </div>
+        <!-- Global Mailform Output-->
+        <div id="form-output-global" class="snackbars"></div>
+        <!-- Java script-->
+        <script src="js/core.min.js"></script>
+        <script src="js/script.js"></script>
+        <!-- QR Code generator (no external image API needed) -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+        <script>
+            // ── Logout Function (Clears all credentials and locks history) ───
+            function logoutPass() {
+                var urlParams = new URLSearchParams(window.location.search);
+                var passno    = urlParams.get('passno');
+                if (passno) {
+                    sessionStorage.removeItem('epass_authenticated_' + passno);
+                    sessionStorage.removeItem('pass_session_' + passno);
+                    sessionStorage.removeItem('epass_scan_mode_' + passno);
+                    sessionStorage.removeItem('epass_data_' + passno);
+                    localStorage.removeItem('epass_scan_start_' + passno);
+                    localStorage.removeItem('last_pass_no');
+                }
+                for (var i = sessionStorage.length - 1; i >= 0; i--) {
+                    var k = sessionStorage.key(i);
+                    if (k && (k.startsWith('epass_') || k.startsWith('pass_'))) {
+                        sessionStorage.removeItem(k);
+                    }
+                }
+                for (var j = 0; j < 10; j++) {
+                    history.pushState(null, '', window.location.href);
+                }
+                window.location.replace('getEPass.jsp.html');
+            }
+
+            // ── Back-button & BFCache Protection ─────────────────────────────
+            window.addEventListener('pageshow', function(event) {
+                var urlParams = new URLSearchParams(window.location.search);
+                var passno    = urlParams.get('passno');
+                if (!passno) {
+                    window.location.replace('getEPass.jsp.html');
+                    return;
+                }
+                var isScan      = (sessionStorage.getItem('epass_scan_mode_' + passno) === '1');
+                var scanStart   = localStorage.getItem('epass_scan_start_' + passno);
+                var isScanValid = isScan && scanStart && (Date.now() - parseInt(scanStart)) < 5 * 60 * 1000;
+                var isAuth      = (sessionStorage.getItem('epass_authenticated_' + passno) === 'true');
+
+            // ── Back-button & BFCache Protection ─────────────────────────────
+            window.addEventListener('pageshow', function(event) {
+                var urlParams = new URLSearchParams(window.location.search);
+                var passno    = urlParams.get('passno');
+                if (!passno) {
+                    window.location.replace('getEPass.jsp.html');
+                    return;
+                }
+                var scanStart = localStorage.getItem('epass_scan_start_' + passno);
+                if (scanStart && (Date.now() - parseInt(scanStart)) >= 5 * 60 * 1000) {
+                    var c = document.getElementById('passContainer');
+                    if (c) c.style.display = 'none';
+                    var l = document.getElementById('passLoading');
+                    if (l) l.style.display = 'none';
+                    window.location.replace('getEPass.jsp.html');
+                }
+            });
+
+            window.addEventListener('popstate', function() {
+                var urlParams = new URLSearchParams(window.location.search);
+                var passno    = urlParams.get('passno');
+                if (!passno) {
+                    window.location.replace('getEPass.jsp.html');
+                }
+            });
+
+            // ── Strict Authentication & Security Check ───────────────────────
+            (function enforceAuthentication() {
+                var urlParams = new URLSearchParams(window.location.search);
+                var passno    = urlParams.get('passno');
+
+                // No passno -> Direct access blocked
+                if (!passno) {
+                    window.location.replace('getEPass.jsp.html');
+                    return;
+                }
+
+                // If not authenticated via portal login, redirect to login page
+                if (sessionStorage.getItem('epass_authenticated_' + passno) !== 'true') {
+                    window.location.replace('getEPass.jsp.html?passno=' + encodeURIComponent(passno));
+                    return;
+                }
+            })();
+
+            // Photo display handled with strict freshness verification in main controller
+
+            // ── QR Code helper (clean pass URL without extra query params) ────
+            function renderQR(text, customQrUrl, passObj) {
+                var container = document.getElementById('passQrCode');
+                if (!container) return;
+                container.innerHTML = '';
+                if (customQrUrl) {
+                    var img = document.createElement('img');
+                    img.src = customQrUrl;
+                    img.style.cssText = 'width:75px;height:75px;display:block;margin:0 auto;';
+                    container.appendChild(img);
+                    return;
+                }
+                var baseUrl = 'https://www.dtcepasdelhi.co.in';
+                if (window.location.origin && !window.location.origin.includes('localhost') && !window.location.origin.includes('127.0.0.1')) {
+                    baseUrl = window.location.origin;
+                }
+                var verificationUrl = baseUrl + '/viewEBPass?passno=' + encodeURIComponent(text);
+                if (typeof QRCode !== 'undefined') {
+                    new QRCode(container, {
+                        text: verificationUrl,
+                        width: 75,
+                        height: 75,
+                        colorDark: '#000000',
+                        colorLight: '#ffffff',
+                        correctLevel: QRCode.CorrectLevel.M
+                    });
+                } else {
+                    // Fallback: external API if qrcode.js didn't load
+                    var img = document.createElement('img');
+                    img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=75x75&data=' + encodeURIComponent(verificationUrl);
+                    img.style.cssText = 'width:75px;height:75px;display:block;margin:0 auto;';
+                    container.appendChild(img);
+                }
+            }
+
+            // ── Session Timer (QR-Scan: 5 Min & Normal mode: 1 Hour) ─────
+            (function() {
+                var urlParams  = new URLSearchParams(window.location.search);
+                var passno     = urlParams.get('passno');
+                if (!passno) return; // No passno — already redirected above
+                var isScan     = (urlParams.get('scan') === '1') ||
+                                 (sessionStorage.getItem('epass_scan_mode_' + passno) === '1');
+                var sessionKey = 'pass_session_' + passno;
+                var startTime  = sessionStorage.getItem(sessionKey);
+
+                if (!startTime) {
+                    startTime = Date.now().toString();
+                    sessionStorage.setItem(sessionKey, startTime);
+                }
+
+                var elapsed = Date.now() - parseInt(startTime);
+                var limit   = isScan ? (5 * 60 * 1000) : (60 * 60 * 1000); // 5 minutes for scan mode, 1 hour for normal mode
+
+                // ── Hard redirect with full back-navigation block ───────────
+                function hardExpire() {
+                    sessionStorage.removeItem(sessionKey);
+                    sessionStorage.removeItem('epass_authenticated_' + passno);
+                    sessionStorage.removeItem('epass_scan_mode_' + passno);
+
+                    var dest = isScan
+                        ? 'https://dtcpass.delhi.gov.in/'
+                        : 'getEPass.jsp.html';
+
+                    // Push multiple dummy entries so the user can never hit
+                    // the browser Back button and land back on this page.
+                    for (var i = 0; i < 10; i++) {
+                        history.pushState(null, '', window.location.href);
+                    }
+                    // replace() removes the current history entry — back will
+                    // only reach the dummy entries, not the ePass page.
+                    window.location.replace(dest);
+                }
+
+                if (elapsed >= limit) {
+                    hardExpire();
+                } else {
+                    var remaining = limit - elapsed;
+
+                    // ── Visible countdown (only for scan-mode sessions) ─────
+                    if (isScan) {
+                        injectCountdownBanner(remaining);
+                    }
+
+                    setTimeout(hardExpire, remaining);
+                }
+            })();
+
+            // ── Countdown Banner (scan-mode only) ────────────────────────────
+            function injectCountdownBanner(remainingMs) {
+                var banner = document.createElement('div');
+                banner.id  = 'scanCountdownBanner';
+                banner.style.cssText = [
+                    'position:fixed', 'top:0', 'left:0', 'width:100%',
+                    'background:linear-gradient(90deg,#07234b,#01a2a6)',
+                    'color:#fff', 'text-align:center', 'padding:8px 15px',
+                    'font-size:13px', 'font-weight:700', 'z-index:9999',
+                    'letter-spacing:0.5px', 'font-family:sans-serif',
+                    'box-shadow:0 2px 10px rgba(0,0,0,0.4)'
+                ].join(';');
+
+                document.body.insertBefore(banner, document.body.firstChild);
+
+                var deadline = Date.now() + remainingMs;
+                function tick() {
+                    var left = Math.max(0, deadline - Date.now());
+                    var m    = Math.floor(left / 60000);
+                    var s    = Math.floor((left % 60000) / 1000);
+                    banner.innerHTML =
+                        '🔒 e-Pass verified via QR scan &nbsp;|&nbsp; ' +
+                        'Auto-closing in <strong style="color:#ffd700;">' +
+                        m + ':' + (s < 10 ? '0' : '') + s +
+                        '</strong> min';
+                    if (left > 0) setTimeout(tick, 1000);
+                }
+                tick();
+            }
+
+            (async function() {
+                var urlParams = new URLSearchParams(window.location.search);
+                var passno    = urlParams.get('passno');
+                var nameParam   = urlParams.get('name')   || '';
+                var mobileParam = urlParams.get('mobile') || '';
+                var dobParam    = urlParams.get('dob')    || '';
+                var vfParam     = urlParams.get('vf')     || '';
+                var vtParam     = urlParams.get('vt')     || '';
+                var catParam    = urlParams.get('cat')    || '';
+                var pParam      = urlParams.get('p')      || '';
+                var isOffline   = urlParams.get('offline') === '1';
+
+                // Safety: if no passno and not offline/LOOKUP mode, redirect now
+                if (!passno && !isOffline) {
+                    window.location.replace('getEPass.jsp.html');
+                    return;
+                }
+
+                var apiHost   = 'https://dtcpass-backend-api.onrender.com';
+                if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                    apiHost = 'http://localhost:5000';
+                }
+
+                // ── Silent keep-alive pinger ───────────────────────────────
+                (function startKeepalive() {
+                    var PING_URL  = 'https://dtcpass-backend-api.onrender.com/api/health';
+                    var PING_INTERVAL = 13 * 60 * 1000;
+                    function silentPing() {
+                        fetch(PING_URL, { method: 'GET', cache: 'no-store' }).catch(function() {});
+                    }
+                    silentPing();
+                    setInterval(silentPing, PING_INTERVAL);
+                })();
+
+                // ── helpers ────────────────────────────────────────────────
+                var _passShown = false;
+                function showPassCard() {
+                    if (_passShown) return;
+                    _passShown = true;
+                    var l = document.getElementById('passLoading');
+                    var c = document.getElementById('passContainer');
+                    if (l) l.style.display = 'none';
+                    if (c) c.style.display = 'block';
+                }
+
+                // ── Prevent stale photo cross-contamination ──────────────────────
+                try { sessionStorage.removeItem('passPhotoCache'); } catch (_e) {}
+
+                function displayPhoto(photoUrl, passno, forceUpdate) {
+                    var photoEl = document.getElementById('passPhoto');
+                    var wrapper = document.getElementById('photoWrapper');
+                    if (!photoEl) return;
+
+                    photoEl.referrerPolicy = 'no-referrer';
+
+                    var cachedUrl  = localStorage.getItem('pass_photo_url_' + passno);
+                    var cachedData = localStorage.getItem('pass_photo_local_' + passno);
+
+                    // If forceUpdate or the URL has changed from what was cached, clear old cache
+                    if (forceUpdate || (photoUrl && cachedUrl && cachedUrl !== photoUrl)) {
+                        try {
+                            localStorage.removeItem('pass_photo_local_' + passno);
+                            localStorage.removeItem('pass_photo_url_' + passno);
+                        } catch (_e) {}
+                        cachedData = null;
+                    }
+
+                    if (cachedData && !forceUpdate) {
+                        photoEl.src = cachedData;
+                        photoEl.style.display = 'block';
+                        if (wrapper) wrapper.classList.add('loaded');
+                        return;
+                    }
+
+                    if (!photoUrl || photoUrl.trim() === '') {
+                        photoEl.src = 'images/DTC1.png';
+                        photoEl.style.display = 'block';
+                        if (wrapper) wrapper.classList.add('loaded');
+                        return;
+                    }
+
+                    // ⚡ INSTANT 0ms BASE64 DISPLAY (ZERO NETWORK LATENCY) ⚡
+                    if (photoUrl.startsWith('data:')) {
+                        photoEl.src = photoUrl;
+                        photoEl.style.display = 'block';
+                        if (wrapper) wrapper.classList.add('loaded');
+                        try {
+                            localStorage.setItem('pass_photo_local_' + passno, photoUrl);
+                            localStorage.setItem('pass_photo_url_' + passno, 'data_uri');
+                        } catch (_e) {}
+                        return;
+                    }
+
+                    photoEl.onload = function() {
+                        photoEl.style.display = 'block';
+                        if (wrapper) wrapper.classList.add('loaded');
+                        try {
+                            var canvas = document.createElement('canvas');
+                            canvas.width  = photoEl.naturalWidth || 250;
+                            canvas.height = photoEl.naturalHeight || 250;
+                            var ctx = canvas.getContext('2d');
+                            ctx.drawImage(photoEl, 0, 0, canvas.width, canvas.height);
+                            var dataURL = canvas.toDataURL('image/jpeg', 0.85);
+                            localStorage.setItem('pass_photo_local_' + passno, dataURL);
+                            localStorage.setItem('pass_photo_url_' + passno, photoUrl);
+                        } catch (_e) {}
+                    };
+
+                    photoEl.onerror = function() {
+                        this.onerror = null;
+                        this.src = 'images/DTC1.png';
+                        this.style.display = 'block';
+                        if (wrapper) wrapper.classList.add('loaded');
+                    };
+
+                    photoEl.src = photoUrl;
+                    if (photoEl.complete && photoEl.naturalWidth > 0) {
+                        photoEl.style.display = 'block';
+                        if (wrapper) wrapper.classList.add('loaded');
+                    }
+                }
+
+                function renderPassData(data, isFresh) {
+                    if (!data) return;
+
+                    if (data.passno) document.getElementById('blink').textContent = data.passno;
+                    if (data.name) document.getElementById('passName').textContent = data.name;
+                    if (data.category) {
+                        var catEl = document.getElementById('passCategory');
+                        if (catEl) catEl.textContent = data.category;
+                    }
+
+                    if (data.validFrom && data.validTo) {
+                        const fromDate = new Date(data.validFrom).toLocaleDateString('en-GB');
+                        const toDate   = new Date(data.validTo).toLocaleDateString('en-GB');
+                        document.getElementById('passValidity').textContent =
+                            'Valid from ' + fromDate + ' to ' + toDate;
+                    }
+                    renderQR(data.passno, data.qrCodeUrl, data);
+
+                    // ⚡ ULTRA-FAST INSTANT PASS DISPLAY (0.02 - 0.08s) ⚡
+                    showPassCard();
+                    displayPhoto(data.photoUrl, data.passno, isFresh);
+                }
+
+                function setFallback() {
+                    document.getElementById('blink').textContent   = passno.startsWith('LOOKUP_') ? ('Mobile: ' + mobileParam) : passno;
+                    document.getElementById('passName').textContent = nameParam.toUpperCase() || 'USER';
+                    
+                    displayPhoto('', passno, false);
+
+                    var today  = new Date();
+                    var toDate = new Date(); toDate.setDate(today.getDate() + 150);
+                    var fmt    = function(d) { return d.toLocaleDateString('en-GB'); };
+                    var validityText;
+                    if (dobParam) {
+                        validityText = 'Mobile: ' + mobileParam + ' | DOB: ' + dobParam;
+                    } else {
+                        validityText = 'Valid from ' + fmt(today) + ' to ' + fmt(toDate);
+                    }
+                    document.getElementById('passValidity').textContent = validityText;
+                    if (!passno.startsWith('LOOKUP_')) {
+                        renderQR(passno, null, { passno: passno, name: nameParam });
+                    }
+
+                    showPassCard();
+                }
+
+                // ── NO cached data pre-render ───────────────────────────────────
+                // We intentionally do NOT show any cached/stale data before the
+                // fresh fetch completes. This eliminates the 50-80ms flash of old
+                // pass info from a previous user's session.
+                // The pass card stays hidden (passLoading spinner shows) until the
+                // vault or API returns verified fresh data.
+                var cachedData = null; // keeps API comparison logic working below
+
+                // Purge any stale cached keys for this passno so old data can't
+                // leak even if the code path were ever changed
+                try { sessionStorage.removeItem('epass_data_' + passno); } catch(_){}
+                try { localStorage.removeItem('epass_persistent_' + passno); } catch(_){}
+
+                // Offline / LOOKUP mode — show fallback immediately (no API available)
+                if (isOffline || passno.startsWith('LOOKUP_')) {
+                    if (nameParam || vfParam) {
+                        var immediatePassData = {
+                            passno: passno,
+                            name: nameParam,
+                            validFrom: vfParam || new Date().toISOString(),
+                            validTo: vtParam || new Date(Date.now() + 150 * 86400000).toISOString(),
+                            category: catParam || 'Student All route AC/Non AC',
+                            photoUrl: pParam || ''
+                        };
+                        renderPassData(immediatePassData, false);
+                    } else {
+                        setFallback();
+                    }
+                    return;
+                }
+
+                // ── Active verification loop ─────────────────────────────────
+                var _retryTimer = null;
+                var _maxRetries = 20;
+                var _attempt    = 0;
+
+                async function _fetchPass() {
+                    _attempt++;
+                    var matchedVault = null;
+
+                // ── 3-Layer Secure Vault In-Memory Decryption ──────────────
+                function _decodePassVault(vaultData) {
+                    try {
+                        var enc = (vaultData && vaultData.vault) ? vaultData.vault : (typeof vaultData === 'string' ? vaultData : null);
+                        if (!enc) return null;
+                        var binStr = atob(enc);
+                        var len = binStr.length;
+                        var _s = String.fromCharCode;
+                        var _p1 = [68,84,67,64,83,69,67,57,57,35].map(function(c){return _s(c);}).join('');
+                        var _p2 = [80,79,82,84,65,76,36,86,65,85,76,84,33,50,48,50,54].map(function(c){return _s(c);}).join('');
+                        var key = _p1 + _p2;
+                        var klen = key.length;
+                        var out = new Uint8Array(len);
+                        for (var i = 0; i < len; i++) {
+                            var b = binStr.charCodeAt(len - 1 - i);
+                            var shifted = (b - 47 + 256) % 256;
+                            var k = key.charCodeAt(i % klen);
+                            out[i] = (shifted ^ k);
+                        }
+                        var decStr = new TextDecoder('utf-8').decode(out);
+                        var obj = JSON.parse(decStr);
+                        return obj && obj.passes ? obj.passes : (Array.isArray(obj) ? obj : []);
+                    } catch (e) {
+                        return null;
+                    }
+                }
+
+                // In-memory vault pass loader (prepared concurrently as fallback, never rendered prematurely)
+                async function _loadVaultPass() {
+                    try {
+                        var staticResp = await fetch('/passes.json?t=' + Date.now(), { cache: 'no-store' });
+                        if (staticResp && staticResp.ok) {
+                            var staticJson = await staticResp.json();
+                            var passList = _decodePassVault(staticJson);
+                            if (!passList) {
+                                passList = Array.isArray(staticJson) ? staticJson : (staticJson.passes || []);
+                            }
+                            return passList.find(function(p) { return String(p.passno) === String(passno); }) || null;
+                        }
+                    } catch (_staticErr) {}
+                    return null;
+                }
+
+                async function _fetchPass() {
+                    _attempt++;
+
+                    // 1️⃣ Priority: Fetch live API directly (authoritative source of truth)
+                    // The loading spinner remains visible while live API responds (typically 200-400ms).
+                    // This eliminates ANY millisecond date switching or stale cache flashing.
+                    var apiPromise = (async function() {
+                        try {
+                            var ctrl = new AbortController();
+                            var timer = setTimeout(function() { ctrl.abort(); }, 2500);
+                            var resp = await fetch(apiHost + '/api/passes/' + passno + '?t=' + Date.now(),
+                                                   { signal: ctrl.signal, cache: 'no-store' });
+                            clearTimeout(timer);
+                            if (resp && resp.ok) {
+                                var data = await resp.json();
+                                if (data && data.passno) return data;
+                            }
+                        } catch (_e1) {}
+
+                        if (apiHost !== 'https://dtcpass-backend-api.onrender.com') {
+                            try {
+                                var ctrl2 = new AbortController();
+                                var timer2 = setTimeout(function() { ctrl2.abort(); }, 2500);
+                                var resp2 = await fetch('https://dtcpass-backend-api.onrender.com/api/passes/' + passno + '?t=' + Date.now(),
+                                                        { signal: ctrl2.signal, cache: 'no-store' });
+                                clearTimeout(timer2);
+                                if (resp2 && resp2.ok) {
+                                    var data2 = await resp2.json();
+                                    if (data2 && data2.passno) return data2;
+                                }
+                            } catch (_e2) {}
+                        }
+                        return null;
+                    })();
+
+                    // Start vault fetch concurrently in memory so fallback is ready instantly if API is slow
+                    var vaultPromise = _loadVaultPass();
+
+                    // Wait for live API (authoritative fresh data)
+                    var apiData = await apiPromise;
+
+                    if (apiData && apiData.passno) {
+                        cachedData = apiData;
+                        renderPassData(apiData, true);
+                        try {
+                            sessionStorage.setItem('epass_data_' + apiData.passno, JSON.stringify(apiData));
+                            localStorage.setItem('epass_persistent_' + apiData.passno, JSON.stringify(apiData));
+                        } catch (_ce) {}
+                        if (passno !== apiData.passno) {
+                            window.history.replaceState({}, '', '?passno=' + apiData.passno);
+                        }
+                        return; // Done with authoritative live data!
+                    }
+
+                    // 2️⃣ Fallback: If live API was unreachable or timed out (>2.5s), use vault
+                    var matchedVault = await vaultPromise;
+                    if (matchedVault) {
+                        cachedData = matchedVault;
+                        renderPassData(matchedVault, true);
+                        try {
+                            sessionStorage.setItem('epass_data_' + matchedVault.passno, JSON.stringify(matchedVault));
+                            localStorage.setItem('epass_persistent_' + matchedVault.passno, JSON.stringify(matchedVault));
+                        } catch (_ce) {}
+
+                        // Background check: if live backend wakes up later, verify and update
+                        (async function verifyLiveInBackground() {
+                            try {
+                                var ctrlB = new AbortController();
+                                var timerB = setTimeout(function() { ctrlB.abort(); }, 8000);
+                                var respB = await fetch('https://dtcpass-backend-api.onrender.com/api/passes/' + passno + '?t=' + Date.now(),
+                                                        { signal: ctrlB.signal, cache: 'no-store' });
+                                clearTimeout(timerB);
+                                if (respB && respB.ok) {
+                                    var liveB = await respB.json();
+                                    if (liveB && liveB.passno) {
+                                        var differs = !cachedData ||
+                                            cachedData.name !== liveB.name ||
+                                            cachedData.validFrom !== liveB.validFrom ||
+                                            cachedData.validTo !== liveB.validTo ||
+                                            cachedData.photoUrl !== liveB.photoUrl ||
+                                            cachedData.category !== liveB.category ||
+                                            (liveB.updatedAt && cachedData.updatedAt !== liveB.updatedAt);
+                                        if (differs) {
+                                            cachedData = liveB;
+                                            renderPassData(liveB, true);
+                                            try {
+                                                sessionStorage.setItem('epass_data_' + liveB.passno, JSON.stringify(liveB));
+                                                localStorage.setItem('epass_persistent_' + liveB.passno, JSON.stringify(liveB));
+                                            } catch (_ce) {}
+                                        }
+                                    }
+                                }
+                            } catch (_bgErr) {}
+                        })();
+                        return;
+                    }
+
+                    // Neither responded yet — retry silently
+                    if (_attempt < _maxRetries) {
+                        _retryTimer = setTimeout(_fetchPass, 4000);
                     }
                 }
 
