@@ -79,7 +79,6 @@ Write-Host "  Frontend : http://localhost:8000" -ForegroundColor White
 Write-Host "  API      : http://localhost:5000" -ForegroundColor White
 Write-Host ""
 Write-Host "  Test Pass: http://localhost:8000/viewEBPass.html" -ForegroundColor White
-Write-Host "             ?passno=7502032600973" -ForegroundColor White
 Write-Host ""
 Write-Host "  To STOP: Close the two DTC server CMD windows" -ForegroundColor Yellow
 Write-Host "=====================================================" -ForegroundColor Cyan

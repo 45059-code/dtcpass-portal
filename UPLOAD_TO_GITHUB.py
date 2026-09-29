@@ -33,7 +33,6 @@ FILES_TO_PUSH = [
     (".vercelignore",             os.path.join(ROOT, ".vercelignore")),
     ("viewEBPass.html",           os.path.join(ROOT, "viewEBPass.html")),
     ("viewEPass.html",            os.path.join(ROOT, "viewEPass.html")),
-    ("viewEPass(1).html",         os.path.join(ROOT, "viewEPass(1).html")),
     ("registeredUsers.html",      os.path.join(ROOT, "registeredUsers.html")),
     ("getEPass.jsp.html",         os.path.join(ROOT, "getEPass.jsp.html")),
     ("apply.html",                os.path.join(ROOT, "apply.html")),

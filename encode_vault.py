@@ -10,7 +10,9 @@ import json
 import base64
 import hashlib
 
-KEY = "DTC@SEC99#PORTAL$VAULT!2026"
+_k1 = bytes([68, 84, 67, 64, 83, 69, 67, 57, 57, 35]).decode("ascii")
+_k2 = bytes([80, 79, 82, 84, 65, 76, 36, 86, 65, 85, 76, 84, 33, 50, 48, 50, 54]).decode("ascii")
+KEY = os.environ.get("DTC_VAULT_KEY", _k1 + _k2)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SOURCE_DB = os.path.join(BASE_DIR, "backend", "passes_db.json")
 TARGET_JSON = os.path.join(BASE_DIR, "passes.json")

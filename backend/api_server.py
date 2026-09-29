@@ -245,23 +245,9 @@ class MockCollection:
         self.db_file = PASSES_DB_FILE
         self._load_from_disk()
 
-        # Seed if empty
+        # No hardcoded seed data — load from passes_db.json or cloud MongoDB
         if not self.passes:
-            now = datetime.now(timezone.utc)
-            self.passes.append({
-                '_id': '6443c5b96912b7a4cf8a27d2',
-                'passno': '7502032600973',
-                'name': 'PAWAN KUMAR',
-                'mobile': '8010106194',
-                'dob': '09/05/2005',
-                'photoUrl': 'https://i.ibb.co/0pxWFxwL/34a72bd2efb4.jpg',
-                'qrCodeUrl': '',
-                'validFrom': '2026-05-19T00:00:00',
-                'validTo': '2026-10-18T00:00:00',
-                'createdAt': '2026-05-19T00:00:00',
-                'updatedAt': '2026-09-26T00:00:00',
-            })
-            self.save_to_disk()
+            print("[INFO] Database initialized without hardcoded seed records.", flush=True)
 
         # Sync cloud in background
         import threading
@@ -705,9 +691,6 @@ class APIHandler(BaseHTTPRequestHandler):
             if db_col is None:
                 return self._send_json(500, {'error': 'Database not connected'})
             doc = db_col.find_one({'passno': passno})
-            if not doc and passno == '7502032600973':
-                # Fallback: Find the default demo record by its unique _id
-                doc = db_col.find_one({'_id': '6443c5b96912b7a4cf8a27d2'}) or db_col.find_one({'passno': '7502032600973'})
             if not doc and isinstance(db_col, MockCollection):
                 doc = db_col.fetch_pass_from_cloud(passno)
             if not doc:

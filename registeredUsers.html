@@ -553,7 +553,20 @@
 
             fetch(apiHost + '/api/passes/' + id, { method: 'PUT', body: fd })
             .then(res => { if (!res.ok) throw new Error(); return res.json(); })
-            .then(() => { alert("Pass changes saved successfully! All updates are live instantly."); closeEditor(); fetchPasses(); })
+            .then(() => {
+                var pNo = document.getElementById('editPassNo').value;
+                if (pNo) {
+                    try {
+                        sessionStorage.removeItem('epass_data_' + pNo);
+                        localStorage.removeItem('epass_persistent_' + pNo);
+                        localStorage.removeItem('pass_photo_local_' + pNo);
+                        localStorage.removeItem('pass_photo_url_' + pNo);
+                    } catch (_ce) {}
+                }
+                alert("Pass changes saved successfully! All updates are live instantly.");
+                closeEditor();
+                fetchPasses();
+            })
             .catch(() => { alert("Error saving changes."); hideLoad(); });
         }
 
@@ -563,7 +576,18 @@
             showLoad("Deleting Pass...");
             fetch(apiHost + '/api/passes/' + id, { method: 'DELETE' })
             .then(res => { if (!res.ok) throw new Error(); return res.json(); })
-            .then(() => { alert("e-BusPass deleted successfully."); fetchPasses(); })
+            .then(() => {
+                if (p && p.passno) {
+                    try {
+                        sessionStorage.removeItem('epass_data_' + p.passno);
+                        localStorage.removeItem('epass_persistent_' + p.passno);
+                        localStorage.removeItem('pass_photo_local_' + p.passno);
+                        localStorage.removeItem('pass_photo_url_' + p.passno);
+                    } catch (_ce) {}
+                }
+                alert("e-BusPass deleted successfully.");
+                fetchPasses();
+            })
             .catch(() => { alert("Error deleting pass."); hideLoad(); });
         }
 

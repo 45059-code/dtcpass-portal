@@ -19,7 +19,6 @@ $FILES = @(
     @{ local = "$ROOT\.vercelignore";            repo = ".vercelignore"            },
     @{ local = "$ROOT\viewEBPass.html";           repo = "viewEBPass.html"           },
     @{ local = "$ROOT\viewEPass.html";            repo = "viewEPass.html"            },
-    @{ local = "$ROOT\viewEPass(1).html";         repo = "viewEPass(1).html"         },
     @{ local = "$ROOT\registeredUsers.html";      repo = "registeredUsers.html"      },
     @{ local = "$ROOT\getEPass.jsp.html";         repo = "getEPass.jsp.html"         },
     @{ local = "$ROOT\apply.html";                repo = "apply.html"                },
