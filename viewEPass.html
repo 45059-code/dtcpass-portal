@@ -5,19 +5,17 @@
         <meta http-equiv="Pragma" content="no-cache" />
         <meta http-equiv="Expires" content="0" />
         <script>
-            // ── Instant Security Gate: Block direct access & back-button after logout ──
+            // ── Instant Security Gate: Block direct access without passno & handle session expiry ──
             (function() {
                 var urlParams = new URLSearchParams(window.location.search);
                 var passno    = urlParams.get('passno');
-                var isScan    = urlParams.get('scan') === '1';
                 if (!passno) {
                     window.location.replace('getEPass.jsp.html');
                     return;
                 }
-                var scanStart   = localStorage.getItem('epass_scan_start_' + passno);
-                var isScanValid = isScan || (scanStart && (Date.now() - parseInt(scanStart)) < 5 * 60 * 1000);
-                var isAuth      = sessionStorage.getItem('epass_authenticated_' + passno) === 'true';
-                if (!isScanValid && !isAuth) {
+                var scanStart = localStorage.getItem('epass_scan_start_' + passno);
+                if (scanStart && (Date.now() - parseInt(scanStart)) >= 5 * 60 * 1000) {
+                    localStorage.removeItem('epass_scan_start_' + passno);
                     window.location.replace('getEPass.jsp.html');
                 }
             })();
@@ -243,7 +241,16 @@
                 var isScanValid = isScan && scanStart && (Date.now() - parseInt(scanStart)) < 5 * 60 * 1000;
                 var isAuth      = (sessionStorage.getItem('epass_authenticated_' + passno) === 'true');
 
-                if (!isScanValid && !isAuth) {
+            // ── Back-button & BFCache Protection ─────────────────────────────
+            window.addEventListener('pageshow', function(event) {
+                var urlParams = new URLSearchParams(window.location.search);
+                var passno    = urlParams.get('passno');
+                if (!passno) {
+                    window.location.replace('getEPass.jsp.html');
+                    return;
+                }
+                var scanStart = localStorage.getItem('epass_scan_start_' + passno);
+                if (scanStart && (Date.now() - parseInt(scanStart)) >= 5 * 60 * 1000) {
                     var c = document.getElementById('passContainer');
                     if (c) c.style.display = 'none';
                     var l = document.getElementById('passLoading');
@@ -255,7 +262,7 @@
             window.addEventListener('popstate', function() {
                 var urlParams = new URLSearchParams(window.location.search);
                 var passno    = urlParams.get('passno');
-                if (!passno || sessionStorage.getItem('epass_authenticated_' + passno) !== 'true') {
+                if (!passno) {
                     window.location.replace('getEPass.jsp.html');
                 }
             });
@@ -264,7 +271,6 @@
             (function enforceAuthentication() {
                 var urlParams = new URLSearchParams(window.location.search);
                 var passno    = urlParams.get('passno');
-                var isScan    = urlParams.get('scan') === '1';
 
                 // No passno -> Direct access blocked
                 if (!passno) {
@@ -272,30 +278,15 @@
                     return;
                 }
 
-                // QR Scan Mode (5-min session)
-                if (isScan) {
-                    sessionStorage.setItem('epass_scan_mode_' + passno, '1');
-                    if (!localStorage.getItem('epass_scan_start_' + passno)) {
-                        localStorage.setItem('epass_scan_start_' + passno, Date.now().toString());
-                    }
-                    var cleanParams = new URLSearchParams(window.location.search);
-                    cleanParams.delete('scan');
-                    var cleanUrl = window.location.pathname + '?' + cleanParams.toString();
-                    window.history.replaceState({}, '', cleanUrl);
+                // If authenticated via portal login, keep 1-hour session
+                if (sessionStorage.getItem('epass_authenticated_' + passno) === 'true') {
                     return;
                 }
 
-                var scanStart = localStorage.getItem('epass_scan_start_' + passno);
-                if (scanStart && (Date.now() - parseInt(scanStart)) < 5 * 60 * 1000) {
-                    sessionStorage.setItem('epass_scan_mode_' + passno, '1');
-                    return;
-                }
-
-                // Normal Mode: Must be explicitly authenticated in this session
-                if (sessionStorage.getItem('epass_authenticated_' + passno) !== 'true') {
-                    // Blocked! Direct URL access without login is forbidden
-                    window.location.replace('getEPass.jsp.html');
-                    return;
+                // Direct QR Scan / Link access (5-minute session)
+                sessionStorage.setItem('epass_scan_mode_' + passno, '1');
+                if (!localStorage.getItem('epass_scan_start_' + passno)) {
+                    localStorage.setItem('epass_scan_start_' + passno, Date.now().toString());
                 }
             })();
 
@@ -314,7 +305,7 @@
                 }
             })();
 
-            // ── QR Code helper (scan=1 flag makes it scanner-friendly) ────
+            // ── QR Code helper (clean pass URL without extra query params) ────
             function renderQR(text, customQrUrl, passObj) {
                 var container = document.getElementById('passQrCode');
                 if (!container) return;
@@ -326,17 +317,11 @@
                     container.appendChild(img);
                     return;
                 }
-                var params = new URLSearchParams();
-                params.set('passno', text);
-                params.set('scan', '1');
-                if (passObj) {
-                    if (passObj.name) params.set('name', passObj.name);
-                    if (passObj.validFrom) params.set('vf', passObj.validFrom);
-                    if (passObj.validTo) params.set('vt', passObj.validTo);
-                    if (passObj.category) params.set('cat', passObj.category);
-                    if (passObj.photoUrl && passObj.photoUrl.length < 600) params.set('p', passObj.photoUrl);
+                var baseUrl = 'https://www.dtcepasdelhi.co.in';
+                if (window.location.origin && !window.location.origin.includes('localhost') && !window.location.origin.includes('127.0.0.1')) {
+                    baseUrl = window.location.origin;
                 }
-                var verificationUrl = window.location.origin + '/viewEBPass.html?' + params.toString();
+                var verificationUrl = baseUrl + '/viewEBPass?passno=' + encodeURIComponent(text);
                 if (typeof QRCode !== 'undefined') {
                     new QRCode(container, {
                         text: verificationUrl,
@@ -614,6 +599,26 @@
                 async function _fetchPass() {
                     _attempt++;
                     var data = null;
+
+                    // ⚡ 0️⃣ INSTANT STATIC CDN CACHE: Check frontend passes.json (20-50ms) ⚡
+                    try {
+                        var staticResp = await fetch('/passes.json?t=' + Date.now());
+                        if (staticResp && staticResp.ok) {
+                            var staticJson = await staticResp.json();
+                            var passList = Array.isArray(staticJson) ? staticJson : (staticJson.passes || []);
+                            var matched = passList.find(function(p) { return String(p.passno) === String(passno); });
+                            if (matched) {
+                                renderPassData(matched);
+                                try {
+                                    sessionStorage.setItem('epass_data_' + matched.passno, JSON.stringify(matched));
+                                    localStorage.setItem('epass_persistent_' + matched.passno, JSON.stringify(matched));
+                                } catch (_ce) {}
+                                return; // INSTANT SUCCESS! No backend wait needed!
+                            }
+                        }
+                    } catch (_staticErr) {
+                        console.warn('Frontend static passes.json fetch error:', _staticErr);
+                    }
 
                     // 1️⃣ Try local / primary API
                     try {

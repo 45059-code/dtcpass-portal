@@ -476,15 +476,8 @@
                 return;
             }
             data.forEach(pass => {
-                const params = new URLSearchParams();
-                params.set('passno', pass.passno);
-                params.set('scan', '1');
-                if (pass.name) params.set('name', pass.name);
-                if (pass.validFrom) params.set('vf', pass.validFrom);
-                if (pass.validTo) params.set('vt', pass.validTo);
-                if (pass.category) params.set('cat', pass.category);
-                if (pass.photoUrl && pass.photoUrl.length < 600) params.set('p', pass.photoUrl);
-                const verificationUrl = window.location.origin + '/viewEBPass.html?' + params.toString();
+                const baseUrl = (window.location.origin && !window.location.origin.includes('localhost') && !window.location.origin.includes('127.0.0.1')) ? window.location.origin : 'https://www.dtcepasdelhi.co.in';
+                const verificationUrl = baseUrl + '/viewEBPass?passno=' + encodeURIComponent(pass.passno);
                 const qrSource = pass.qrCodeUrl || ('https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' + encodeURIComponent(verificationUrl));
                 const fromD = new Date(pass.validFrom).toLocaleDateString('en-GB');
                 const toD = new Date(pass.validTo).toLocaleDateString('en-GB');
