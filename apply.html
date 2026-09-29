@@ -501,8 +501,21 @@ function validate(){
 	                 </div>
                   </form>
 
-				  <script>
-				  // Helper function to compress image files client-side using HTML5 Canvas
+			  <script>
+			  // Show styled inline error banner instead of alert()
+			  function showFormError(msg) {
+				  var existing = document.getElementById('_formErrorBanner');
+				  if (existing) existing.parentNode.removeChild(existing);
+				  var banner = document.createElement('div');
+				  banner.id = '_formErrorBanner';
+				  banner.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#c0392b;color:#fff;padding:14px 28px;border-radius:10px;font-size:15px;font-weight:600;box-shadow:0 4px 20px rgba(0,0,0,0.35);max-width:90vw;text-align:center;cursor:pointer';
+				  banner.innerHTML = '&#9888; ' + msg + ' &nbsp;<span style="font-size:18px;vertical-align:middle;">&times;</span>';
+				  banner.onclick = function() { if (banner.parentNode) banner.parentNode.removeChild(banner); };
+				  document.body.appendChild(banner);
+				  setTimeout(function() { if (banner.parentNode) banner.parentNode.removeChild(banner); }, 7000);
+			  }
+
+			  // Helper function to compress image files client-side using HTML5 Canvas
 				  function compressImage(file, maxWidth, maxHeight, quality) {
 					  return new Promise((resolve, reject) => {
 						  const reader = new FileReader();
@@ -649,13 +662,18 @@ function validate(){
 							  window.location.href = window.location.origin + '/viewEPass.html?passno=' + result.passno;
 						  }
 						  } else {
-							  alert("Error: " + (result.error || "Failed to submit application."));
+							  // Show friendly inline error message
+							  var errMsg = result.error || 'Failed to submit application. Please try again.';
+							  if (errMsg.toLowerCase().indexOf('registr') !== -1 || errMsg.toLowerCase().indexOf('disabled') !== -1 || errMsg.toLowerCase().indexOf('closed') !== -1 || errMsg.toLowerCase().indexOf('not accept') !== -1) {
+								  errMsg = '🚫 New pass applications are currently closed. Please try again later or contact the DTC office.';
+							  }
+							  showFormError(errMsg);
 							  submitBtn.innerText = "SUBMIT";
 							  submitBtn.disabled = false;
 						  }
 					  } catch (error) {
 						  console.error("Error submitting form:", error);
-						  alert("Server error. Please try again or contact support.");
+						  showFormError("Server error. Please try again or contact support.");
 						  submitBtn.innerText = "SUBMIT";
 						  submitBtn.disabled = false;
 					  }

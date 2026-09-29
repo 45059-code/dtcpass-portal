@@ -10,19 +10,19 @@
                 var urlParams = new URLSearchParams(window.location.search);
                 var passno    = urlParams.get('passno');
                 if (!passno) {
-                    window.location.replace('getEPass.jsp.html');
+                    window.location.replace('index.html');
                     return;
                 }
                 var isAuth = sessionStorage.getItem('epass_authenticated_' + passno) === 'true';
                 if (!isAuth) {
                     // Direct access without portal login is strictly blocked
-                    window.location.replace('getEPass.jsp.html?passno=' + encodeURIComponent(passno));
+                    window.location.replace('index.html');
                     return;
                 }
                 var scanStart = localStorage.getItem('epass_scan_start_' + passno);
                 if (scanStart && (Date.now() - parseInt(scanStart)) >= 5 * 60 * 1000) {
                     localStorage.removeItem('epass_scan_start_' + passno);
-                    window.location.replace('getEPass.jsp.html');
+                    window.location.replace('index.html');
                 }
             })();
         </script>

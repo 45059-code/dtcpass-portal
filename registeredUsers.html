@@ -5,8 +5,19 @@
     <meta http-equiv="Expires" content="0" />
     <meta name="robots" content="noindex, nofollow">
     <script>
-        // Security Gate Guard
-        document.documentElement.style.visibility = 'visible';
+        // ── Instant Security Gate: Redirect to homepage if not admin-authenticated ──
+        (function() {
+            var isAuth = sessionStorage.getItem('admin_authenticated') === 'true';
+            var authTime = parseInt(sessionStorage.getItem('admin_auth_time') || '0');
+            var sessionValid = isAuth && authTime && (Date.now() - authTime) < 15 * 60 * 1000;
+            if (!sessionValid) {
+                // Clear stale session data
+                sessionStorage.removeItem('admin_authenticated');
+                sessionStorage.removeItem('admin_auth_time');
+                // Redirect to homepage immediately
+                window.location.replace('index.html');
+            }
+        })();
     </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
