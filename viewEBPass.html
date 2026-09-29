@@ -5,25 +5,54 @@
         <meta http-equiv="Pragma" content="no-cache" />
         <meta http-equiv="Expires" content="0" />
         <script>
-            // ── Instant Security Gate: Block direct access without login ──
+            // ── Instant Security Gate ──────────────────────────────────────────
+            // Allows: (1) portal-login users via sessionStorage, (2) QR code scans (?qr=1)
+            // Blocks: direct URL access → redirects to homepage (index.html)
             (function() {
                 var urlParams = new URLSearchParams(window.location.search);
                 var passno    = urlParams.get('passno');
+                var isQrScan  = urlParams.get('qr') === '1';
+
+                // No passno at all → direct access, go to homepage
                 if (!passno) {
                     window.location.replace('index.html');
                     return;
                 }
+
                 var isAuth = sessionStorage.getItem('epass_authenticated_' + passno) === 'true';
-                if (!isAuth) {
-                    // Direct access without portal login is strictly blocked
-                    window.location.replace('index.html');
-                    return;
+
+                // Already authenticated (portal login or prior QR scan in same session)
+                if (isAuth) {
+                    // Strip &qr=1 from URL bar if present so it doesn't show
+                    if (isQrScan) {
+                        history.replaceState(null, '', '?passno=' + encodeURIComponent(passno));
+                    }
+                    return; // Allow access
                 }
-                var scanStart = localStorage.getItem('epass_scan_start_' + passno);
-                if (scanStart && (Date.now() - parseInt(scanStart)) >= 5 * 60 * 1000) {
-                    localStorage.removeItem('epass_scan_start_' + passno);
-                    window.location.replace('index.html');
+
+                // QR scan: grant access, stamp time, then clean URL immediately
+                if (isQrScan) {
+                    var scanKey = 'epass_scan_start_' + passno;
+                    var scanStart = localStorage.getItem(scanKey);
+                    if (scanStart && (Date.now() - parseInt(scanStart)) >= 5 * 60 * 1000) {
+                        // Scan window expired → homepage
+                        localStorage.removeItem(scanKey);
+                        window.location.replace('index.html');
+                        return;
+                    }
+                    if (!scanStart) {
+                        localStorage.setItem(scanKey, Date.now().toString());
+                    }
+                    // Authenticate this scan session
+                    sessionStorage.setItem('epass_authenticated_' + passno, 'true');
+                    sessionStorage.setItem('epass_scan_mode_' + passno, '1');
+                    // ✅ Strip ?qr=1 from the URL bar — visitors won't see it
+                    history.replaceState(null, '', '?passno=' + encodeURIComponent(passno));
+                    return; // Allow access
                 }
+
+                // No auth, no QR param → direct URL → redirect to homepage
+                window.location.replace('index.html');
             })();
         </script>
         <!-- Site Title-->
@@ -261,16 +290,22 @@
                 var urlParams = new URLSearchParams(window.location.search);
                 var passno    = urlParams.get('passno');
                 if (!passno) {
-                    window.location.replace('getEPass.jsp.html');
+                    window.location.replace('index.html');
                     return;
                 }
-                var scanStart = localStorage.getItem('epass_scan_start_' + passno);
-                if (scanStart && (Date.now() - parseInt(scanStart)) >= 5 * 60 * 1000) {
-                    var c = document.getElementById('passContainer');
-                    if (c) c.style.display = 'none';
-                    var l = document.getElementById('passLoading');
-                    if (l) l.style.display = 'none';
-                    window.location.replace('getEPass.jsp.html');
+                var isScanMode = sessionStorage.getItem('epass_scan_mode_' + passno) === '1';
+                if (isScanMode) {
+                    var scanStart = localStorage.getItem('epass_scan_start_' + passno);
+                    if (scanStart && (Date.now() - parseInt(scanStart)) >= 5 * 60 * 1000) {
+                        var c = document.getElementById('passContainer');
+                        if (c) c.style.display = 'none';
+                        var l = document.getElementById('passLoading');
+                        if (l) l.style.display = 'none';
+                        localStorage.removeItem('epass_scan_start_' + passno);
+                        sessionStorage.removeItem('epass_authenticated_' + passno);
+                        sessionStorage.removeItem('epass_scan_mode_' + passno);
+                        window.location.replace('index.html');
+                    }
                 }
             });
 
@@ -278,27 +313,12 @@
                 var urlParams = new URLSearchParams(window.location.search);
                 var passno    = urlParams.get('passno');
                 if (!passno) {
-                    window.location.replace('getEPass.jsp.html');
+                    window.location.replace('index.html');
                 }
             });
 
-            // ── Strict Authentication & Security Check ───────────────────────
-            (function enforceAuthentication() {
-                var urlParams = new URLSearchParams(window.location.search);
-                var passno    = urlParams.get('passno');
-
-                // No passno -> Direct access blocked
-                if (!passno) {
-                    window.location.replace('getEPass.jsp.html');
-                    return;
-                }
-
-                // If not authenticated via portal login, redirect to login page
-                if (sessionStorage.getItem('epass_authenticated_' + passno) !== 'true') {
-                    window.location.replace('getEPass.jsp.html?passno=' + encodeURIComponent(passno));
-                    return;
-                }
-            })();
+            // ── Note: Authentication already enforced by head IIFE gate above ─
+            // No duplicate check needed here — removed to prevent blocking QR scans.
 
             // Photo display handled with strict freshness verification in main controller
 
@@ -318,7 +338,8 @@
                 if (window.location.origin && !window.location.origin.includes('localhost') && !window.location.origin.includes('127.0.0.1')) {
                     baseUrl = window.location.origin;
                 }
-                var verificationUrl = baseUrl + '/viewEBPass?passno=' + encodeURIComponent(text);
+                // Append &qr=1 so the security gate knows this is a legitimate QR scan
+                var verificationUrl = baseUrl + '/viewEBPass?passno=' + encodeURIComponent(text) + '&qr=1';
                 if (typeof QRCode !== 'undefined') {
                     new QRCode(container, {
                         text: verificationUrl,
@@ -373,7 +394,8 @@
                     sessionStorage.removeItem('epass_scan_mode_' + passno);
                     // Block back-button
                     for (var i = 0; i < 10; i++) history.pushState(null, '', window.location.href);
-                    window.location.replace(isScan ? 'https://dtcpass.delhi.gov.in/' : 'getEPass.jsp.html');
+                    // Session expired → go to homepage
+                    window.location.replace('index.html');
                 }
 
                 if (elapsed >= limit) {
@@ -398,7 +420,7 @@
 
                 // Safety: if no passno and not offline/LOOKUP mode, redirect now
                 if (!passno && !isOffline) {
-                    window.location.replace('getEPass.jsp.html');
+                    window.location.replace('index.html');
                     return;
                 }
 
