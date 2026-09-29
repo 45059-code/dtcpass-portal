@@ -6,12 +6,17 @@
         <meta http-equiv="Expires" content="0" />
         <script>
             // ── Instant Security Gate ──────────────────────────────────────────
-            // Allows: (1) portal-login users via sessionStorage, (2) QR code scans (?qr=1)
+            // Allows: (1) portal-login users via sessionStorage, (2) QR scans via #scan hash
             // Blocks: direct URL access → redirects to homepage (index.html)
+            // WHY hash instead of ?qr=1:
+            //   – Hash (#scan) is NEVER sent to the server, so Vercel routing is unaffected
+            //   – history.replaceState wipes it BEFORE the browser paints the address bar
+            //   – No server-side leakage or logging of a scan token
             (function() {
                 var urlParams = new URLSearchParams(window.location.search);
                 var passno    = urlParams.get('passno');
-                var isQrScan  = urlParams.get('qr') === '1';
+                // Detect QR scan via hash fragment (#scan) – never visible in address bar
+                var isQrScan  = (window.location.hash === '#scan');
 
                 // No passno at all → direct access, go to homepage
                 if (!passno) {
@@ -23,35 +28,28 @@
 
                 // Already authenticated (portal login or prior QR scan in same session)
                 if (isAuth) {
-                    // Strip &qr=1 from URL bar if present so it doesn't show
+                    // Wipe the #scan hash so it never shows in the address bar
                     if (isQrScan) {
                         history.replaceState(null, '', '?passno=' + encodeURIComponent(passno));
                     }
                     return; // Allow access
                 }
 
-                // QR scan: grant access, stamp time, then clean URL immediately
+                // QR scan: always give a FRESH 5-min window (reset stale old timestamps)
                 if (isQrScan) {
                     var scanKey = 'epass_scan_start_' + passno;
-                    var scanStart = localStorage.getItem(scanKey);
-                    if (scanStart && (Date.now() - parseInt(scanStart)) >= 5 * 60 * 1000) {
-                        // Scan window expired → homepage
-                        localStorage.removeItem(scanKey);
-                        window.location.replace('index.html');
-                        return;
-                    }
-                    if (!scanStart) {
-                        localStorage.setItem(scanKey, Date.now().toString());
-                    }
+                    // Always stamp NOW – this prevents old expired timestamps from
+                    // incorrectly blocking a brand-new scan attempt
+                    localStorage.setItem(scanKey, Date.now().toString());
                     // Authenticate this scan session
                     sessionStorage.setItem('epass_authenticated_' + passno, 'true');
                     sessionStorage.setItem('epass_scan_mode_' + passno, '1');
-                    // ✅ Strip ?qr=1 from the URL bar — visitors won't see it
+                    // ✅ Wipe #scan from the URL bar instantly – clean URL only shows passno
                     history.replaceState(null, '', '?passno=' + encodeURIComponent(passno));
                     return; // Allow access
                 }
 
-                // No auth, no QR param → direct URL → redirect to homepage
+                // No auth, no #scan hash → direct URL → redirect to homepage
                 window.location.replace('index.html');
             })();
         </script>
@@ -338,8 +336,9 @@
                 if (window.location.origin && !window.location.origin.includes('localhost') && !window.location.origin.includes('127.0.0.1')) {
                     baseUrl = window.location.origin;
                 }
-                // Append &qr=1 so the security gate knows this is a legitimate QR scan
-                var verificationUrl = baseUrl + '/viewEBPass?passno=' + encodeURIComponent(text) + '&qr=1';
+                // Append #scan hash – detected by security gate, wiped from URL bar instantly,
+                // never sent to the server so Vercel routing is not affected
+                var verificationUrl = baseUrl + '/viewEBPass?passno=' + encodeURIComponent(text) + '#scan';
                 if (typeof QRCode !== 'undefined') {
                     new QRCode(container, {
                         text: verificationUrl,
