@@ -594,8 +594,24 @@ def parse_multipart(handler):
 
 class APIHandler(BaseHTTPRequestHandler):
 
+    # Suppress default Python/version disclosure in Server header
+    server_version = 'DTC-API'
+    sys_version = ''
+
     def address_string(self):
         return self.client_address[0]
+
+    def log_message(self, format, *args):
+        # Suppress default request logging (prevents IP/path leakage to logs)
+        pass
+
+    def _add_security_headers(self):
+        """Add hardened security headers to every response."""
+        self.send_header('X-Content-Type-Options', 'nosniff')
+        self.send_header('X-Frame-Options', 'DENY')
+        self.send_header('X-XSS-Protection', '1; mode=block')
+        self.send_header('Referrer-Policy', 'no-referrer')
+        self.send_header('Server', 'DTC-API')
 
     def _send_json(self, status: int, data):
         body = json.dumps(data, ensure_ascii=False).encode('utf-8')
@@ -610,6 +626,7 @@ class APIHandler(BaseHTTPRequestHandler):
         self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
         self.send_header('Pragma', 'no-cache')
         self.send_header('Expires', '0')
+        self._add_security_headers()
         self.end_headers()
         self.wfile.write(body)
 
@@ -628,6 +645,7 @@ class APIHandler(BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self._add_security_headers()
         self.end_headers()
 
     # ── GET ──────────────────────────────────────────────────────────────────

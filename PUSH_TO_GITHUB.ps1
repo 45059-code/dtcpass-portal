@@ -5,11 +5,11 @@ $TOKEN = $env:GITHUB_TOKEN
 if (-not $TOKEN) {
     $TOKEN = "YOUR_GITHUB_TOKEN_HERE"
 }
-$OWNER     = "45059-code"
+$OWNER     = if ($env:GITHUB_OWNER) { $env:GITHUB_OWNER } else { "dtcpass-owner" }
 $REPO      = "dtcpass-portal"
 $BRANCH    = "main"
 $ROOT = $PSScriptRoot
-if (-not $ROOT) { $ROOT = "d:\dtcpass-portal-main\dtcpass-portal-main" }
+if (-not $ROOT) { $ROOT = (Get-Location).Path }
 
 $FILES = @(
     @{ local = "$ROOT\backend\requirements.txt"; repo = "backend/requirements.txt" },

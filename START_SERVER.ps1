@@ -25,7 +25,6 @@ Start-Sleep -Seconds 1
 # Resolve Python dynamically
 $PYEXE = ""
 $candidates = @(
-    "C:\Users\45059\AppData\Local\Programs\Python\Python314\python.exe",
     "$env:LOCALAPPDATA\Programs\Python\Python314\python.exe",
     "$env:LOCALAPPDATA\Programs\Python\Python313\python.exe",
     "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",

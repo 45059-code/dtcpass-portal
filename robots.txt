@@ -1,2 +1,15 @@
 User-agent: *
 Disallow: /
+Disallow: /passes.json
+Disallow: /backend/
+Disallow: /registeredUsers
+Disallow: /registeredUsers.html
+Disallow: /admin
+Disallow: /api/
+Disallow: /*.py$
+Disallow: /*.ps1$
+Disallow: /*.bat$
+Disallow: /*.json$
+Disallow: /*.log$
+
+X-Robots-Tag: noindex, nofollow, noarchive, nosnippet

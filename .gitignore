@@ -11,11 +11,26 @@ backend/__pycache__/
 *.log
 server_debug.log
 
-# Environment variables (secrets)
+# Sensitive Database & Local Secrets (Protects pass database from public git)
+backend/passes_db.json
+backend/passes_db.json.bak
 .env
 backend/.env
+github_upload.json
 
-# Temporary / OS files
+# Local scratch & extraction scripts (Prevents personal directory / username leakage)
+extract_*.py
+sync_*.py
+generate_modified_table.py
+list_files.py
+check_tags.py
+clean_extracted_table.py
+inspect_images.py
+cleaned_extracted_table.html
+extracted_table.html
+modified_table.html
+
+# Temporary / OS / IDE files
 .DS_Store
 Thumbs.db
 .tempmediaStorage/
