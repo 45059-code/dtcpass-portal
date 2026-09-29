@@ -5,9 +5,8 @@
     <meta http-equiv="Expires" content="0" />
     <meta name="robots" content="noindex, nofollow">
     <script>
-        if (sessionStorage.getItem('admin_authenticated') !== 'true') {
-            window.location.replace('getEPass.jsp.html');
-        }
+        // Security Gate Guard
+        document.documentElement.style.visibility = 'visible';
     </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -204,7 +203,39 @@
     </style>
 </head>
 <body>
-    <div class="container">
+    <!-- Admin Security Gateway Modal (Shown when not authenticated) -->
+    <div id="adminLoginGate" style="display: flex; align-items: center; justify-content: center; min-height: 85vh; padding: 20px;">
+        <div style="background: var(--card-bg); border: 1px solid var(--primary-glow); border-radius: 16px; padding: 40px 32px; max-width: 440px; width: 100%; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.6), 0 0 25px rgba(1,162,166,0.3); backdrop-filter: blur(16px);">
+            <img src="images/DTC1.png" alt="DTC" style="width: 80px; margin-bottom: 16px; filter: drop-shadow(0 0 10px var(--primary-glow));">
+            <h2 style="font-size: 20px; font-weight: 700; color: #fff; margin-bottom: 6px; letter-spacing: 0.5px;">DTC Security Gateway</h2>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 24px;">Department Admin Authorization Required</p>
+            
+            <div style="position: relative; margin-bottom: 18px; text-align: left;">
+                <label style="font-size: 12px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 6px;">ADMIN ACCESS PIN / KEY</label>
+                <div style="position: relative;">
+                    <i class="fa fa-lock" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--primary-glow); font-size: 16px;"></i>
+                    <input type="password" id="adminPinInput" placeholder="Enter Access Key / PIN" autocomplete="off" style="width: 100%; padding: 13px 15px 13px 40px; background: rgba(255,255,255,0.04); border: 1px solid var(--border-color); border-radius: 10px; color: #fff; font-size: 14px; outline: none; transition: all 0.3s;" onkeydown="if(event.key==='Enter') unlockAdminGate();">
+                </div>
+            </div>
+
+            <div id="adminGateErr" style="display: none; color: #ff3b30; font-size: 12.5px; margin-bottom: 15px; font-weight: 600; background: rgba(255,59,48,0.1); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,59,48,0.3);">
+                Access Denied: Invalid Admin Credentials
+            </div>
+
+            <button type="button" id="btnUnlockAdmin" onclick="unlockAdminGate()" style="width: 100%; padding: 14px; background: linear-gradient(135deg, #01a2a6, #00c6ff); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; letter-spacing: 0.5px; cursor: pointer; transition: all 0.3s; box-shadow: 0 4px 15px rgba(1,162,166,0.4);">
+                <i class="fa fa-shield"></i> AUTHENTICATE & UNLOCK
+            </button>
+            
+            <div style="margin-top: 22px;">
+                <a href="getEPass.jsp.html" style="font-size: 12.5px; color: var(--text-muted); text-decoration: none; transition: color 0.2s;" onmouseover="this.style.color='#01a2a6'" onmouseout="this.style.color='var(--text-muted)'">
+                    <i class="fa fa-arrow-left"></i> Return to Portal Home
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Admin Dashboard Container (Locked until authenticated) -->
+    <div class="container" id="adminDashboard" style="display: none;">
         <header>
             <div class="header-logo">
                 <img src="images/DTC1.png" alt="DTC Logo">
@@ -213,7 +244,12 @@
                     <p>Registered e-BusPass Dashboard Panel</p>
                 </div>
             </div>
-            <div class="stats-badge" id="statsBadge">Loading...</div>
+            <div style="display:flex; align-items:center; gap:12px;">
+                <div class="stats-badge" id="statsBadge">Loading...</div>
+                <button class="btn-home" onclick="adminLogout()" style="background:rgba(255,59,48,0.18); border-color:#ff3b30; color:#ff6b6b; cursor:pointer;" title="Logout Admin Session">
+                    <i class="fa fa-sign-out"></i> Logout
+                </button>
+            </div>
         <!-- Admin Global Controls -->
         <div class="admin-controls" style="background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(12px); border-radius: 16px; border: 1px solid var(--border-color); padding: 15px 20px; margin-bottom: 25px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);">
             <div style="display: flex; align-items: center; gap: 12px;">
@@ -325,13 +361,77 @@
             }, duration);
         }
 
-        // ── Security Check: Block direct URL and back-button access without login ──
+        // ── Security Check: Block direct access without admin login (15 min auto-lock) ──
+        var _VALID_ADMIN_HASHES = ['YWRtaW45OQ==', 'NjM5ODc0MzEzMg==', 'ZHRjYWRtaW45OQ==', 'MTMvMTEvMjAxMg==', 'ZHRjQDIwMjY='];
+
         function checkAdminAuth() {
-            if (sessionStorage.getItem('admin_authenticated') !== 'true') {
-                window.location.replace('getEPass.jsp.html');
-                return false;
+            var isAuth = sessionStorage.getItem('admin_authenticated') === 'true';
+            var authTime = parseInt(sessionStorage.getItem('admin_auth_time') || '0');
+            // Auto-lock session after 15 minutes of inactivity
+            if (isAuth && authTime && (Date.now() - authTime) < 15 * 60 * 1000) {
+                sessionStorage.setItem('admin_auth_time', Date.now().toString());
+                var g = document.getElementById('adminLoginGate');
+                var d = document.getElementById('adminDashboard');
+                if (g) g.style.display = 'none';
+                if (d) d.style.display = 'block';
+                return true;
             }
-            return true;
+            // Not authenticated or session expired
+            sessionStorage.removeItem('admin_authenticated');
+            sessionStorage.removeItem('admin_auth_time');
+            var g = document.getElementById('adminLoginGate');
+            var d = document.getElementById('adminDashboard');
+            if (g) g.style.display = 'flex';
+            if (d) d.style.display = 'none';
+            var inp = document.getElementById('adminPinInput');
+            if (inp) inp.focus();
+            return false;
+        }
+
+        function unlockAdminGate() {
+            var inp = document.getElementById('adminPinInput');
+            var err = document.getElementById('adminGateErr');
+            if (!inp) return;
+            var val = inp.value.trim();
+            if (!val) {
+                if (err) { err.textContent = 'Please enter admin access credentials.'; err.style.display = 'block'; }
+                return;
+            }
+            var b64 = btoa(val);
+            if (_VALID_ADMIN_HASHES.indexOf(b64) !== -1) {
+                sessionStorage.setItem('admin_authenticated', 'true');
+                sessionStorage.setItem('admin_auth_time', Date.now().toString());
+                if (err) err.style.display = 'none';
+                inp.value = '';
+                var g = document.getElementById('adminLoginGate');
+                var d = document.getElementById('adminDashboard');
+                if (g) g.style.display = 'none';
+                if (d) d.style.display = 'block';
+                fetchPasses();
+                fetchSettings();
+            } else {
+                if (err) { err.textContent = 'Access Denied: Invalid Admin Credentials'; err.style.display = 'block'; }
+                inp.value = '';
+                inp.focus();
+            }
+        }
+
+        function adminLogout() {
+            sessionStorage.removeItem('admin_authenticated');
+            sessionStorage.removeItem('admin_auth_time');
+            for (var i = sessionStorage.length - 1; i >= 0; i--) {
+                var k = sessionStorage.key(i);
+                if (k && (k.startsWith('admin_') || k.startsWith('epass_'))) {
+                    sessionStorage.removeItem(k);
+                }
+            }
+            var g = document.getElementById('adminLoginGate');
+            var d = document.getElementById('adminDashboard');
+            if (d) d.style.display = 'none';
+            if (g) g.style.display = 'flex';
+            var inp = document.getElementById('adminPinInput');
+            if (inp) { inp.value = ''; inp.focus(); }
+            showToast('Logged out securely.', 'info');
         }
 
         window.addEventListener('pageshow', checkAdminAuth);

@@ -193,7 +193,7 @@ async def run():
     print(f"  Serving : {ROOT}", flush=True)
     print(flush=True)
     print(f"  Home    : http://localhost:{bound_port}/index.html", flush=True)
-    print(f"  ePass   : http://localhost:{bound_port}/viewEBPass.html", flush=True)
+    print(f"  ePass   : http://localhost:{bound_port}/getEPass.jsp.html", flush=True)
     print(f"  Admin   : http://localhost:{bound_port}/registeredUsers.html",
           flush=True)
     print(flush=True)

@@ -107,6 +107,8 @@
     	            return false; 
     	        }
     	        if (userInput === orgOtp) {
+    	            sessionStorage.setItem('admin_authenticated', 'true');
+    	            sessionStorage.setItem('admin_auth_time', Date.now().toString());
     	            window.location.href = "registeredUsers.html";
     	        } else {
     	            alert("Invalid OTP. Please try again.");

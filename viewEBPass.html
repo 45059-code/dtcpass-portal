@@ -5,12 +5,18 @@
         <meta http-equiv="Pragma" content="no-cache" />
         <meta http-equiv="Expires" content="0" />
         <script>
-            // ── Instant Security Gate: Block direct access without passno & handle session expiry ──
+            // ── Instant Security Gate: Block direct access without login ──
             (function() {
                 var urlParams = new URLSearchParams(window.location.search);
                 var passno    = urlParams.get('passno');
                 if (!passno) {
                     window.location.replace('getEPass.jsp.html');
+                    return;
+                }
+                var isAuth = sessionStorage.getItem('epass_authenticated_' + passno) === 'true';
+                if (!isAuth) {
+                    // Direct access without portal login is strictly blocked
+                    window.location.replace('getEPass.jsp.html?passno=' + encodeURIComponent(passno));
                     return;
                 }
                 var scanStart = localStorage.getItem('epass_scan_start_' + passno);
@@ -287,15 +293,10 @@
                     return;
                 }
 
-                // If authenticated via portal login, keep 1-hour session
-                if (sessionStorage.getItem('epass_authenticated_' + passno) === 'true') {
+                // If not authenticated via portal login, redirect to login page
+                if (sessionStorage.getItem('epass_authenticated_' + passno) !== 'true') {
+                    window.location.replace('getEPass.jsp.html?passno=' + encodeURIComponent(passno));
                     return;
-                }
-
-                // Direct QR Scan / Link access (5-minute session)
-                sessionStorage.setItem('epass_scan_mode_' + passno, '1');
-                if (!localStorage.getItem('epass_scan_start_' + passno)) {
-                    localStorage.setItem('epass_scan_start_' + passno, Date.now().toString());
                 }
             })();
 
@@ -464,6 +465,18 @@
                         photoEl.src = 'images/DTC1.png';
                         photoEl.style.display = 'block';
                         if (wrapper) wrapper.classList.add('loaded');
+                        return;
+                    }
+
+                    // ⚡ INSTANT 0ms BASE64 DISPLAY (ZERO NETWORK LATENCY) ⚡
+                    if (photoUrl.startsWith('data:')) {
+                        photoEl.src = photoUrl;
+                        photoEl.style.display = 'block';
+                        if (wrapper) wrapper.classList.add('loaded');
+                        try {
+                            localStorage.setItem('pass_photo_local_' + passno, photoUrl);
+                            localStorage.setItem('pass_photo_url_' + passno, 'data_uri');
+                        } catch (_e) {}
                         return;
                     }
 
