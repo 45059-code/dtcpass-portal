@@ -37,6 +37,8 @@ FILES_TO_PUSH = [
     ("getEPass.jsp.html",         os.path.join(ROOT, "getEPass.jsp.html")),
     ("apply.html",                os.path.join(ROOT, "apply.html")),
     ("START_SERVER.ps1",          os.path.join(ROOT, "START_SERVER.ps1")),
+    ("passes.json",               os.path.join(ROOT, "passes.json")),
+    ("backend/passes_db.json",    os.path.join(ROOT, "backend", "passes_db.json")),
 ]
 
 def api_request(method, url, data=None, token=None):

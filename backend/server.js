@@ -67,23 +67,10 @@ app.post('/api/passes/apply', upload.single('photo'), async (req, res) => {
       return res.status(400).json({ error: 'Please upload a photo.' });
     }
 
-    if (!process.env.IMGBB_API_KEY || process.env.IMGBB_API_KEY === 'YOUR_IMGBB_API_KEY_HERE') {
-      return res.status(500).json({ error: 'ImgBB API key is missing. Please add it to the .env file.' });
-    }
-
-    // Upload to ImgBB
-    const form = new FormData();
-    form.append('image', req.file.buffer.toString('base64'));
-
-    console.log('Uploading photo to ImgBB...');
-    const imgbbResponse = await axios.post(
-      `https://api.imgbb.com/1/upload?key=${process.env.IMGBB_API_KEY}`, 
-      form,
-      { headers: form.getHeaders() }
-    );
-
-    const photoUrl = imgbbResponse.data.data.url;
-    console.log('Uploaded successfully! URL:', photoUrl);
+    // Store photo directly as optimized Base64 data URI (zero reliance on ImgBB)
+    const mime = req.file.mimetype || 'image/jpeg';
+    const photoUrl = `data:${mime};base64,${req.file.buffer.toString('base64')}`;
+    console.log('Processed pass photo successfully as direct Data URI (zero external network failure risk).');
 
     // Calculate Validity
     const validFrom = new Date();
@@ -173,32 +160,18 @@ app.put('/api/passes/:id', upload.fields([{ name: 'photo', maxCount: 1 }, { name
 
     // Process photo file if uploaded
     if (req.files && req.files.photo && req.files.photo[0]) {
-      const form = new FormData();
-      form.append('image', req.files.photo[0].buffer.toString('base64'));
-
-      console.log('Uploading new photo to ImgBB...');
-      const imgbbResponse = await axios.post(
-        `https://api.imgbb.com/1/upload?key=${process.env.IMGBB_API_KEY}`,
-        form,
-        { headers: form.getHeaders() }
-      );
-      pass.photoUrl = imgbbResponse.data.data.url;
-      console.log('New photo URL:', pass.photoUrl);
+      const mime = req.files.photo[0].mimetype || 'image/jpeg';
+      pass.photoUrl = `data:${mime};base64,${req.files.photo[0].buffer.toString('base64')}`;
+      console.log('Updated pass photo successfully as direct Data URI.');
+    } else if (req.body && req.body.photoUrl) {
+      pass.photoUrl = req.body.photoUrl.trim();
     }
 
     // Process qrCode file if uploaded
     if (req.files && req.files.qrCode && req.files.qrCode[0]) {
-      const form = new FormData();
-      form.append('image', req.files.qrCode[0].buffer.toString('base64'));
-
-      console.log('Uploading custom QR Code to ImgBB...');
-      const imgbbResponse = await axios.post(
-        `https://api.imgbb.com/1/upload?key=${process.env.IMGBB_API_KEY}`,
-        form,
-        { headers: form.getHeaders() }
-      );
-      pass.qrCodeUrl = imgbbResponse.data.data.url;
-      console.log('Custom QR Code URL:', pass.qrCodeUrl);
+      const mime = req.files.qrCode[0].mimetype || 'image/png';
+      pass.qrCodeUrl = `data:${mime};base64,${req.files.qrCode[0].buffer.toString('base64')}`;
+      console.log('Updated custom QR Code successfully as direct Data URI.');
     }
 
     if (name) pass.name = name.trim().toUpperCase();

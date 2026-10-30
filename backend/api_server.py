@@ -221,6 +221,25 @@ except ImportError:
         def __hash__(self):
             return hash(str(self))
 
+PASSES_DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'passes_db.json')
+CLOUD_API_URL  = 'https://dtcpass-backend-api.onrender.com'
+
+_LOCAL_PHOTO_CACHE = {}
+
+def _get_local_photo(passno):
+    global _LOCAL_PHOTO_CACHE
+    if not _LOCAL_PHOTO_CACHE and os.path.exists(PASSES_DB_FILE):
+        try:
+            with open(PASSES_DB_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            p_list = data.get('passes', []) if isinstance(data, dict) else data
+            for p in p_list:
+                if p.get('passno') and p.get('photoUrl'):
+                    _LOCAL_PHOTO_CACHE[str(p['passno'])] = p['photoUrl']
+        except Exception:
+            pass
+    return _LOCAL_PHOTO_CACHE.get(str(passno))
+
 def doc_to_dict(doc) -> dict:
     """Convert a MongoDB document to a JSON-serialisable dict."""
     if doc is None:
@@ -233,10 +252,16 @@ def doc_to_dict(doc) -> dict:
     for key in ('validFrom', 'validTo', 'createdAt', 'updatedAt'):
         if key in d and isinstance(d[key], datetime):
             d[key] = d[key].isoformat()
-    return d
 
-PASSES_DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'passes_db.json')
-CLOUD_API_URL  = 'https://dtcpass-backend-api.onrender.com'
+    # Automatically resolve legacy / broken ImgBB links to reliable base64 data URIs
+    purl = d.get('photoUrl', '')
+    pno = d.get('passno')
+    if pno and (not purl or 'ibb.co' in purl):
+        local_p = _get_local_photo(pno)
+        if local_p:
+            d['photoUrl'] = local_p
+
+    return d
 
 class MockCollection:
     def __init__(self):
@@ -474,25 +499,12 @@ def _compress_image(image_bytes: bytes, max_bytes: int = 1_400_000) -> bytes:
 
 
 def upload_to_imgbb(image_bytes: bytes) -> str:
-    """Upload image bytes to ImgBB and return public URL, with data URI fallback."""
-    if not IMGBB_API_KEY or IMGBB_API_KEY == 'YOUR_IMGBB_API_KEY_HERE' or not HAS_REQUESTS:
-        return 'data:image/jpeg;base64,' + base64.b64encode(image_bytes).decode('utf-8')
+    """Process pass photo directly to high-quality compressed Base64 JPEG data URI (zero reliance on ImgBB)."""
     try:
-        # Compress image to stay within ImgBB's 32 MB limit (safe at <1.5 MB raw)
         compressed = _compress_image(image_bytes)
-        encoded = base64.b64encode(compressed).decode('utf-8')
-        resp = req_lib.post(
-            'https://api.imgbb.com/1/upload',
-            params={'key': IMGBB_API_KEY},
-            data={'image': encoded},
-            timeout=30
-        )
-        if not resp.ok:
-            print(f"[WARN] ImgBB returned HTTP {resp.status_code}: {resp.text[:200]}", flush=True)
-        resp.raise_for_status()
-        return resp.json()['data']['url']
+        return 'data:image/jpeg;base64,' + base64.b64encode(compressed).decode('utf-8')
     except Exception as e:
-        print(f"[WARN] ImgBB upload failed ({e}), using inline data URI fallback", flush=True)
+        print(f"[WARN] Photo compression fallback ({e})", flush=True)
         return 'data:image/jpeg;base64,' + base64.b64encode(image_bytes).decode('utf-8')
 
 
@@ -830,6 +842,8 @@ class APIHandler(BaseHTTPRequestHandler):
 
                 if files.get('photo'):
                     update['photoUrl'] = upload_to_imgbb(files['photo'])
+                elif fields.get('photoUrl'):
+                    update['photoUrl'] = fields['photoUrl'].strip()
                 if files.get('qrCode'):
                     update['qrCodeUrl'] = upload_to_imgbb(files['qrCode'])
                 if fields.get('name'):    update['name']      = fields['name'].strip().upper()

@@ -489,6 +489,12 @@
                         return;
                     }
 
+                    if (photoUrl && photoUrl.indexOf('ibb.co') !== -1) {
+                        if (cachedData && cachedData.photoUrl && cachedData.photoUrl.startsWith('data:')) {
+                            photoUrl = cachedData.photoUrl;
+                        }
+                    }
+
                     // ⚡ INSTANT 0ms BASE64 DISPLAY (ZERO NETWORK LATENCY) ⚡
                     if (photoUrl.startsWith('data:')) {
                         photoEl.src = photoUrl;
@@ -518,9 +524,18 @@
 
                     photoEl.onerror = function() {
                         this.onerror = null;
-                        this.src = 'images/DTC1.png';
-                        this.style.display = 'block';
-                        if (wrapper) wrapper.classList.add('loaded');
+                        var self = this;
+                        _loadVaultPass().then(function(vp) {
+                            if (vp && vp.photoUrl && vp.photoUrl.startsWith('data:')) {
+                                self.src = vp.photoUrl;
+                            } else {
+                                self.src = 'images/DTC1.png';
+                            }
+                            if (wrapper) wrapper.classList.add('loaded');
+                        }).catch(function() {
+                            self.src = 'images/DTC1.png';
+                            if (wrapper) wrapper.classList.add('loaded');
+                        });
                     };
 
                     photoEl.src = photoUrl;
@@ -707,6 +722,14 @@
                     var apiData = await apiPromise;
 
                     if (apiData && apiData.passno) {
+                        if (!apiData.photoUrl || apiData.photoUrl.indexOf('ibb.co') !== -1) {
+                            try {
+                                var vPass = await vaultPromise;
+                                if (vPass && vPass.photoUrl && vPass.photoUrl.startsWith('data:')) {
+                                    apiData.photoUrl = vPass.photoUrl;
+                                }
+                            } catch (_vErr) {}
+                        }
                         cachedData = apiData;
                         renderPassData(apiData, true);
                         try {

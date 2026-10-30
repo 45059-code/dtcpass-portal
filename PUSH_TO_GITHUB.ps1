@@ -22,7 +22,9 @@ $FILES = @(
     @{ local = "$ROOT\registeredUsers.html";      repo = "registeredUsers.html"      },
     @{ local = "$ROOT\getEPass.jsp.html";         repo = "getEPass.jsp.html"         },
     @{ local = "$ROOT\apply.html";                repo = "apply.html"                },
-    @{ local = "$ROOT\START_SERVER.ps1";          repo = "START_SERVER.ps1"          }
+    @{ local = "$ROOT\START_SERVER.ps1";          repo = "START_SERVER.ps1"          },
+    @{ local = "$ROOT\passes.json";                repo = "passes.json"                },
+    @{ local = "$ROOT\backend\passes_db.json";     repo = "backend/passes_db.json"     }
 )
 
 $COMMIT_MSG = "fix: support custom profile QR codes and origin-based scanner bypass URL"
