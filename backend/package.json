@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "build": "echo Build completed",
     "start": "node server.js",
     "cron": "node cron.js",
     "dev": "node server.js",

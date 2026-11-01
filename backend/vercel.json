@@ -1,0 +1,6 @@
+{
+  "version": 2,
+  "framework": null,
+  "buildCommand": "echo Backend build completed",
+  "outputDirectory": "."
+}
