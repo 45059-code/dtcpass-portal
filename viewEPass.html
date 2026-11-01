@@ -464,10 +464,27 @@
                     photoEl.referrerPolicy = 'no-referrer';
 
                     var cachedLocal = localStorage.getItem('pass_photo_local_' + passno);
+                    // Automatically clear any old placeholder avatar (< 6000 chars)
+                    if (cachedLocal && cachedLocal.length < 6000) {
+                        try { localStorage.removeItem('pass_photo_local_' + passno); } catch(_){}
+                        cachedLocal = null;
+                    }
 
-                    // If photoUrl contains ibb.co or is missing, NEVER load from ibb.co!
+                    // If incoming photoUrl is a valid real photo (> 5000 chars), display it immediately
+                    if (photoUrl && photoUrl.startsWith('data:image/') && photoUrl.length > 5000) {
+                        photoEl.src = photoUrl;
+                        photoEl.style.display = 'block';
+                        if (wrapper) wrapper.classList.add('loaded');
+                        try {
+                            localStorage.setItem('pass_photo_local_' + passno, photoUrl);
+                            localStorage.setItem('pass_photo_url_' + passno, 'data_uri');
+                        } catch (_e) {}
+                        return;
+                    }
+
+                    // If photoUrl contains ibb.co or is missing, check cached real photo or vault
                     if (!photoUrl || photoUrl.indexOf('ibb.co') !== -1) {
-                        if (cachedLocal && cachedLocal.startsWith('data:image/')) {
+                        if (cachedLocal && cachedLocal.startsWith('data:image/') && cachedLocal.length > 5000) {
                             photoUrl = cachedLocal;
                         } else if (_vaultPassCache) {
                             var vp = _vaultPassCache.find(function(p) { return String(p.passno) === String(passno); });
