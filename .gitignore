@@ -11,9 +11,7 @@ backend/__pycache__/
 *.log
 server_debug.log
 
-# Sensitive Database & Local Secrets (Protects pass database from public git)
-backend/passes_db.json
-backend/passes_db.json.bak
+# Sensitive Local Secrets
 .env
 backend/.env
 github_upload.json

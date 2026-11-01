@@ -463,40 +463,22 @@
 
                     photoEl.referrerPolicy = 'no-referrer';
 
-                    var cachedUrl  = localStorage.getItem('pass_photo_url_' + passno);
-                    var cachedData = localStorage.getItem('pass_photo_local_' + passno);
+                    var cachedLocal = localStorage.getItem('pass_photo_local_' + passno);
 
-                    // If forceUpdate or the URL has changed from what was cached, clear old cache
-                    if (forceUpdate || (photoUrl && cachedUrl && cachedUrl !== photoUrl)) {
-                        try {
-                            localStorage.removeItem('pass_photo_local_' + passno);
-                            localStorage.removeItem('pass_photo_url_' + passno);
-                        } catch (_e) {}
-                        cachedData = null;
-                    }
-
-                    if (cachedData && !forceUpdate) {
-                        photoEl.src = cachedData;
-                        photoEl.style.display = 'block';
-                        if (wrapper) wrapper.classList.add('loaded');
-                        return;
-                    }
-
-                    if (!photoUrl || photoUrl.trim() === '') {
-                        photoEl.src = 'images/DTC1.png';
-                        photoEl.style.display = 'block';
-                        if (wrapper) wrapper.classList.add('loaded');
-                        return;
-                    }
-
-                    if (photoUrl && photoUrl.indexOf('ibb.co') !== -1) {
-                        if (cachedData && cachedData.photoUrl && cachedData.photoUrl.startsWith('data:')) {
-                            photoUrl = cachedData.photoUrl;
+                    // If photoUrl contains ibb.co or is missing, NEVER load from ibb.co!
+                    if (!photoUrl || photoUrl.indexOf('ibb.co') !== -1) {
+                        if (cachedLocal && cachedLocal.startsWith('data:image/')) {
+                            photoUrl = cachedLocal;
+                        } else if (_vaultPassCache) {
+                            var vp = _vaultPassCache.find(function(p) { return String(p.passno) === String(passno); });
+                            if (vp && vp.photoUrl && vp.photoUrl.startsWith('data:image/')) {
+                                photoUrl = vp.photoUrl;
+                            }
                         }
                     }
 
                     // ⚡ INSTANT 0ms BASE64 DISPLAY (ZERO NETWORK LATENCY) ⚡
-                    if (photoUrl.startsWith('data:')) {
+                    if (photoUrl && photoUrl.startsWith('data:image/')) {
                         photoEl.src = photoUrl;
                         photoEl.style.display = 'block';
                         if (wrapper) wrapper.classList.add('loaded');
@@ -507,26 +489,35 @@
                         return;
                     }
 
+                    // If still an ibb.co or empty URL, fetch from vault pass before showing placeholder
+                    if (!photoUrl || photoUrl.indexOf('ibb.co') !== -1) {
+                        _loadVaultPass().then(function(vp) {
+                            if (vp && vp.photoUrl && vp.photoUrl.startsWith('data:image/')) {
+                                photoEl.src = vp.photoUrl;
+                                try { localStorage.setItem('pass_photo_local_' + passno, vp.photoUrl); } catch(_){}
+                            } else {
+                                photoEl.src = 'images/DTC1.png';
+                            }
+                            photoEl.style.display = 'block';
+                            if (wrapper) wrapper.classList.add('loaded');
+                        }).catch(function() {
+                            photoEl.src = 'images/DTC1.png';
+                            photoEl.style.display = 'block';
+                            if (wrapper) wrapper.classList.add('loaded');
+                        });
+                        return;
+                    }
+
                     photoEl.onload = function() {
                         photoEl.style.display = 'block';
                         if (wrapper) wrapper.classList.add('loaded');
-                        try {
-                            var canvas = document.createElement('canvas');
-                            canvas.width  = photoEl.naturalWidth || 250;
-                            canvas.height = photoEl.naturalHeight || 250;
-                            var ctx = canvas.getContext('2d');
-                            ctx.drawImage(photoEl, 0, 0, canvas.width, canvas.height);
-                            var dataURL = canvas.toDataURL('image/jpeg', 0.85);
-                            localStorage.setItem('pass_photo_local_' + passno, dataURL);
-                            localStorage.setItem('pass_photo_url_' + passno, photoUrl);
-                        } catch (_e) {}
                     };
 
                     photoEl.onerror = function() {
                         this.onerror = null;
                         var self = this;
                         _loadVaultPass().then(function(vp) {
-                            if (vp && vp.photoUrl && vp.photoUrl.startsWith('data:')) {
+                            if (vp && vp.photoUrl && vp.photoUrl.startsWith('data:image/')) {
                                 self.src = vp.photoUrl;
                             } else {
                                 self.src = 'images/DTC1.png';
@@ -598,21 +589,9 @@
                 var isScanMode = (sessionStorage.getItem('epass_scan_mode_' + passno) === '1');
                 var cachedData = null;
 
-                if (!isScanMode) {
-                    try {
-                        var rawCached = sessionStorage.getItem('epass_data_' + passno);
-                        if (rawCached) {
-                            cachedData = JSON.parse(rawCached);
-                        }
-                    } catch (_e) {}
-                    if (cachedData && cachedData.passno) {
-                        renderPassData(cachedData, false);
-                    }
-                } else {
-                    // QR scan mode: strictly purge cached data to prevent stale date flashes
-                    try { sessionStorage.removeItem('epass_data_' + passno); } catch(_){}
-                    try { localStorage.removeItem('epass_persistent_' + passno); } catch(_){}
-                }
+                // Strictly purge stale session caches on fresh pass load to prevent date flashes
+                try { sessionStorage.removeItem('epass_data_' + passno); } catch(_){}
+                try { localStorage.removeItem('epass_persistent_' + passno); } catch(_){}
 
                 // Offline / LOOKUP mode — show fallback immediately (no API available)
                 if (isOffline || passno.startsWith('LOOKUP_')) {
@@ -665,7 +644,11 @@
                 }
 
                 // In-memory vault pass loader (prepared concurrently as fallback, never rendered prematurely)
+                var _vaultPassCache = null;
                 async function _loadVaultPass() {
+                    if (_vaultPassCache !== null) {
+                        return _vaultPassCache.find(function(p) { return String(p.passno) === String(passno); }) || null;
+                    }
                     try {
                         var staticResp = await fetch('/passes.json?t=' + Date.now(), { cache: 'no-store' });
                         if (staticResp && staticResp.ok) {
@@ -674,7 +657,8 @@
                             if (!passList) {
                                 passList = Array.isArray(staticJson) ? staticJson : (staticJson.passes || []);
                             }
-                            return passList.find(function(p) { return String(p.passno) === String(passno); }) || null;
+                            _vaultPassCache = passList || [];
+                            return _vaultPassCache.find(function(p) { return String(p.passno) === String(passno); }) || null;
                         }
                     } catch (_staticErr) {}
                     return null;
@@ -752,36 +736,7 @@
                             localStorage.setItem('epass_persistent_' + matchedVault.passno, JSON.stringify(matchedVault));
                         } catch (_ce) {}
 
-                        // Background check: if live backend wakes up later, verify and update
-                        (async function verifyLiveInBackground() {
-                            try {
-                                var ctrlB = new AbortController();
-                                var timerB = setTimeout(function() { ctrlB.abort(); }, 8000);
-                                var respB = await fetch('https://dtcpass-backend-api.onrender.com/api/passes/' + passno + '?t=' + Date.now(),
-                                                        { signal: ctrlB.signal, cache: 'no-store' });
-                                clearTimeout(timerB);
-                                if (respB && respB.ok) {
-                                    var liveB = await respB.json();
-                                    if (liveB && liveB.passno) {
-                                        var differs = !cachedData ||
-                                            cachedData.name !== liveB.name ||
-                                            cachedData.validFrom !== liveB.validFrom ||
-                                            cachedData.validTo !== liveB.validTo ||
-                                            cachedData.photoUrl !== liveB.photoUrl ||
-                                            cachedData.category !== liveB.category ||
-                                            (liveB.updatedAt && cachedData.updatedAt !== liveB.updatedAt);
-                                        if (differs) {
-                                            cachedData = liveB;
-                                            renderPassData(liveB, true);
-                                            try {
-                                                sessionStorage.setItem('epass_data_' + liveB.passno, JSON.stringify(liveB));
-                                                localStorage.setItem('epass_persistent_' + liveB.passno, JSON.stringify(liveB));
-                                            } catch (_ce) {}
-                                        }
-                                    }
-                                }
-                            } catch (_bgErr) {}
-                        })();
+                        // Vault data matched - verified and final
                         return;
                     }
 

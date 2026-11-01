@@ -16,7 +16,7 @@ echo [*] Staging all changes...
 git add -A
 
 echo [*] Committing changes...
-git commit -m "fix: resolve pass photo display and remove ImgBB server dependency"
+git commit -m "fix: eliminate 0.2s date flash and guarantee Base64 photo display"
 
 echo [*] Pushing to origin main...
 git push origin main
@@ -35,3 +35,4 @@ if %errorlevel% equ 0 (
 
 echo.
 pause
+
