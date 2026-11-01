@@ -1,8 +1,5 @@
 {
   "version": 2,
-  "framework": null,
-  "buildCommand": "echo Build completed",
-  "outputDirectory": ".",
   "cleanUrls": true,
   "headers": [
     {
