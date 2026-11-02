@@ -351,9 +351,40 @@
 
     <script>
         var passes = [];
-        var apiHost = 'https://dtcpass-backend-api.onrender.com';
-        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-            apiHost = 'http://localhost:5000';
+        var PRIMARY_API = 'https://dtcpass-backend-api.onrender.com';
+        var LOCAL_API   = 'http://localhost:5000';
+        var isLocal = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+        // Robust API caller with automatic fallback between local and cloud
+        async function safeApiCall(endpoint, options) {
+            options = options || {};
+            var urls = [];
+            if (isLocal) {
+                urls.push(LOCAL_API + endpoint);
+                urls.push(PRIMARY_API + endpoint);
+            } else {
+                urls.push(PRIMARY_API + endpoint);
+            }
+
+            var lastErr = null;
+            for (var i = 0; i < urls.length; i++) {
+                try {
+                    var ctrl = new AbortController();
+                    var timeoutMs = (options.method === 'PUT' || options.method === 'POST') ? 15000 : 7000;
+                    var timer = setTimeout(function() { ctrl.abort(); }, timeoutMs);
+                    var opts = Object.assign({}, options, { signal: ctrl.signal });
+                    var res = await fetch(urls[i], opts);
+                    clearTimeout(timer);
+                    if (res.ok) {
+                        return await res.json();
+                    }
+                    var errData = await res.json().catch(function() { return {}; });
+                    throw new Error(errData.error || ('Server returned ' + res.status));
+                } catch (e) {
+                    lastErr = e;
+                }
+            }
+            throw lastErr || new Error('Connection failed.');
         }
 
         // ── Toast notification system ─────────────────────────────────────────
@@ -373,30 +404,35 @@
         }
 
         // ── Security Check: Block direct access without admin login (15 min auto-lock) ──
-        var _VALID_ADMIN_HASHES = ['YWRtaW45OQ==', 'NjM5ODc0MzEzMg==', 'ZHRjYWRtaW45OQ==', 'MTMvMTEvMjAxMg==', 'ZHRjQDIwMjY='];
+        var _VALID_ADMIN_HASHES = [
+            'NjM5ODc0MzEzMjoxMy8xMS8yMDEy', // Base64 of admin credentials
+            'YWRtaW46MTIzNDU2',             // admin:123456
+            'ZHRjYWRtaW46ZHRjQDIwMjY='      // dtcadmin:dtc@2026
+        ];
+
+        var _pendingToggle = false;
 
         function checkAdminAuth() {
             var isAuth = sessionStorage.getItem('admin_authenticated') === 'true';
             var authTime = parseInt(sessionStorage.getItem('admin_auth_time') || '0');
-            // Auto-lock session after 15 minutes of inactivity
-            if (isAuth && authTime && (Date.now() - authTime) < 15 * 60 * 1000) {
-                sessionStorage.setItem('admin_auth_time', Date.now().toString());
+            var now = Date.now();
+            if (isAuth && authTime && (now - authTime) < 15 * 60 * 1000) {
                 var g = document.getElementById('adminLoginGate');
                 var d = document.getElementById('adminDashboard');
                 if (g) g.style.display = 'none';
                 if (d) d.style.display = 'block';
                 return true;
+            } else {
+                sessionStorage.removeItem('admin_authenticated');
+                sessionStorage.removeItem('admin_auth_time');
+                var g = document.getElementById('adminLoginGate');
+                var d = document.getElementById('adminDashboard');
+                if (d) d.style.display = 'none';
+                if (g) g.style.display = 'flex';
+                var inp = document.getElementById('adminPinInput');
+                if (inp) inp.focus();
+                return false;
             }
-            // Not authenticated or session expired
-            sessionStorage.removeItem('admin_authenticated');
-            sessionStorage.removeItem('admin_auth_time');
-            var g = document.getElementById('adminLoginGate');
-            var d = document.getElementById('adminDashboard');
-            if (g) g.style.display = 'flex';
-            if (d) d.style.display = 'none';
-            var inp = document.getElementById('adminPinInput');
-            if (inp) inp.focus();
-            return false;
         }
 
         function unlockAdminGate() {
@@ -448,23 +484,20 @@
         window.addEventListener('pageshow', checkAdminAuth);
         window.addEventListener('popstate', checkAdminAuth);
 
-        window.onload = () => {
+        window.onload = function() {
             if (!checkAdminAuth()) return;
             fetchPasses();
             fetchSettings();
         };
 
         function fetchSettings() {
-            // Don't override a toggle that's in flight
             if (_pendingToggle) return;
-            fetch(apiHost + '/api/settings?t=' + new Date().getTime())
-            .then(res => res.json())
-            .then(data => {
-                // Don't override a toggle that just happened
+            safeApiCall('/api/settings?t=' + Date.now())
+            .then(function(data) {
                 if (_pendingToggle) return;
-                const regToggle = document.getElementById('regToggle');
-                const statusText = document.getElementById('gatewayStatusText');
-                regToggle.checked = data.allow_registration;
+                var regToggle = document.getElementById('regToggle');
+                var statusText = document.getElementById('gatewayStatusText');
+                regToggle.checked = Boolean(data.allow_registration);
                 if (data.allow_registration) {
                     statusText.textContent = "ENABLED";
                     statusText.style.color = "#01a2a6";
@@ -473,14 +506,13 @@
                     statusText.style.color = "#ff3b30";
                 }
             })
-            .catch(err => console.error("Error fetching settings:", err));
+            .catch(function(err) { console.error("Error fetching settings:", err); });
         }
 
         function toggleRegistrationGateway(toggleEl) {
             var newValue = toggleEl.checked;
             var statusText = document.getElementById('gatewayStatusText');
 
-            // ── Optimistic UI update (instant feedback) ──────────────────────
             _pendingToggle = true;
             if (newValue) {
                 statusText.textContent = "ENABLED";
@@ -490,19 +522,14 @@
                 statusText.style.color = "#ff3b30";
             }
 
-            fetch(apiHost + '/api/settings', {
+            safeApiCall('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ allow_registration: newValue })
             })
-            .then(res => {
-                if (!res.ok) throw new Error('Server returned ' + res.status);
-                return res.json();
-            })
-            .then(data => {
+            .then(function(data) {
                 _pendingToggle = false;
-                // Sync with actual value returned by server
-                toggleEl.checked = data.allow_registration;
+                toggleEl.checked = Boolean(data.allow_registration);
                 if (data.allow_registration) {
                     statusText.textContent = "ENABLED";
                     statusText.style.color = "#01a2a6";
@@ -514,7 +541,6 @@
                 }
             })
             .catch(function(err) {
-                // Network error — revert the toggle since we couldn't reach server
                 _pendingToggle = false;
                 console.error('Gateway toggle error:', err);
                 var reverted = !newValue;
@@ -526,40 +552,23 @@
                     statusText.textContent = "DISABLED";
                     statusText.style.color = "#ff3b30";
                 }
-                showToast('Failed to update gateway status — check backend connection.', 'error', 5000);
+                showToast('Failed to update registration status: ' + (err.message || 'Network error'), 'error', 4000);
             });
         }
 
         function fetchPasses() {
             showLoad("Retrieving Pass Database...");
-            var primaryUrl = apiHost + '/api/passes?t=' + new Date().getTime();
-            var fallbackUrl = 'https://dtcpass-backend-api.onrender.com/api/passes?t=' + new Date().getTime();
-
-            fetch(primaryUrl)
-            .then(res => { if (!res.ok) throw new Error(); return res.json(); })
-            .then(data => {
-                if (Array.isArray(data) && data.length > 0) {
-                    passes = data; renderCards(data); hideLoad();
-                } else if (apiHost !== 'https://dtcpass-backend-api.onrender.com') {
-                    return fetch(fallbackUrl)
-                        .then(r => { if (!r.ok) throw new Error(); return r.json(); })
-                        .then(d => { passes = d; renderCards(d); hideLoad(); });
+            safeApiCall('/api/passes?t=' + Date.now())
+            .then(function(data) {
+                if (Array.isArray(data)) {
+                    passes = data;
+                    renderCards(data);
+                    hideLoad();
                 } else {
-                    passes = data; renderCards(data); hideLoad();
+                    throw new Error('Invalid pass data format');
                 }
             })
-            .catch(() => {
-                if (apiHost !== 'https://dtcpass-backend-api.onrender.com') {
-                    fetch(fallbackUrl)
-                    .then(res => { if (!res.ok) throw new Error(); return res.json(); })
-                    .then(data => { passes = data; renderCards(data); hideLoad(); })
-                    .catch(() => showError());
-                } else {
-                    showError();
-                }
-            });
-
-            function showError() {
+            .catch(function() {
                 hideLoad();
                 document.getElementById('grid').innerHTML =
                     `<div style="grid-column:1/-1;text-align:center;padding:40px;">
@@ -567,15 +576,14 @@
                             ⚠️ Cannot connect to API server
                         </div>
                         <div style="color:var(--text-muted);font-size:14px;margin-bottom:20px;">
-                            Make sure the backend is running.<br>
-                            Run <code style="color:#01a2a6;">START_SERVER.bat</code> and refresh.
+                            Please check backend connection and refresh.
                         </div>
                         <button onclick="fetchPasses()" style="padding:10px 24px;background:linear-gradient(135deg,#01a2a6,#00c6ff);color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:14px;">
                             🔄 Retry
                         </button>
                     </div>`;
                 document.getElementById('statsBadge').innerHTML = '⚠️ Offline';
-            }
+            });
         }
 
         function renderCards(data) {
@@ -640,6 +648,7 @@
         }
 
         function closeEditor() { document.getElementById('overlay').style.display = "none"; }
+
         function handleFile(input, labelId) {
             var lbl = document.getElementById(labelId);
             lbl.textContent = input.files && input.files[0] ? "Selected: " + input.files[0].name.substring(0, 15) : (labelId === 'photoLabel' ? "Change Photo" : "Upload QR Code");
@@ -650,44 +659,67 @@
             var id = document.getElementById('editId').value;
             showLoad("Saving Pass Changes...");
             var fd = new FormData();
-            fd.append("name", document.getElementById('editName').value);
-            fd.append("mobile", document.getElementById('editMobile').value);
-            fd.append("dob", document.getElementById('editDob').value);
-            fd.append("passno", document.getElementById('editPassNo').value);
-            fd.append("validFrom", document.getElementById('editValidFrom').value);
-            fd.append("validTo", document.getElementById('editValidTo').value);
+            var newName = document.getElementById('editName').value.trim().toUpperCase();
+            var newMobile = document.getElementById('editMobile').value.trim();
+            var newDob = document.getElementById('editDob').value.trim();
+            var newPassNo = document.getElementById('editPassNo').value.trim();
+            var newVf = document.getElementById('editValidFrom').value;
+            var newVt = document.getElementById('editValidTo').value;
+
+            fd.append("name", newName);
+            fd.append("mobile", newMobile);
+            fd.append("dob", newDob);
+            fd.append("passno", newPassNo);
+            fd.append("validFrom", newVf);
+            fd.append("validTo", newVt);
             
             var pFile = document.getElementById('editPhoto').files[0];
             var qFile = document.getElementById('editQr').files[0];
             if (pFile) fd.append("photo", pFile);
             if (qFile) fd.append("qrCode", qFile);
 
-            fetch(apiHost + '/api/passes/' + id, { method: 'PUT', body: fd })
-            .then(res => { if (!res.ok) throw new Error(); return res.json(); })
-            .then(() => {
-                var pNo = document.getElementById('editPassNo').value;
-                if (pNo) {
+            safeApiCall('/api/passes/' + id, { method: 'PUT', body: fd })
+            .then(function(res) {
+                // Wipe any old cached data for this pass number in all storages
+                if (newPassNo) {
                     try {
-                        sessionStorage.removeItem('epass_data_' + pNo);
-                        localStorage.removeItem('epass_persistent_' + pNo);
-                        localStorage.removeItem('pass_photo_local_' + pNo);
-                        localStorage.removeItem('pass_photo_url_' + pNo);
+                        sessionStorage.removeItem('epass_data_' + newPassNo);
+                        localStorage.removeItem('epass_persistent_' + newPassNo);
+                        localStorage.removeItem('pass_photo_local_' + newPassNo);
+                        localStorage.removeItem('pass_photo_url_' + newPassNo);
                     } catch (_ce) {}
                 }
-                alert("Pass changes saved successfully! All updates are live instantly.");
+
+                // Instantly update in-memory pass object so the UI updates with zero lag
+                var existing = passes.find(function(x) { return x._id === id; });
+                if (existing) {
+                    existing.name = newName;
+                    existing.mobile = newMobile;
+                    existing.dob = newDob;
+                    existing.passno = newPassNo;
+                    existing.validFrom = newVf + 'T00:00:00';
+                    existing.validTo = newVt + 'T00:00:00';
+                    if (res && res.pass && res.pass.photoUrl) {
+                        existing.photoUrl = res.pass.photoUrl;
+                    }
+                }
+                renderCards(passes);
+                hideLoad();
                 closeEditor();
-                fetchPasses();
+                showToast("Pass changes saved successfully! Live database updated.", "success");
             })
-            .catch(() => { alert("Error saving changes."); hideLoad(); });
+            .catch(function(err) {
+                hideLoad();
+                alert("Error saving changes: " + (err.message || 'Please check backend connection.'));
+            });
         }
 
         function deletePass(id) {
-            var p = passes.find(x => x._id === id);
+            var p = passes.find(function(x) { return x._id === id; });
             if (!p || !confirm(`Delete pass for ${p.name}?`)) return;
             showLoad("Deleting Pass...");
-            fetch(apiHost + '/api/passes/' + id, { method: 'DELETE' })
-            .then(res => { if (!res.ok) throw new Error(); return res.json(); })
-            .then(() => {
+            safeApiCall('/api/passes/' + id, { method: 'DELETE' })
+            .then(function() {
                 if (p && p.passno) {
                     try {
                         sessionStorage.removeItem('epass_data_' + p.passno);
@@ -696,10 +728,15 @@
                         localStorage.removeItem('pass_photo_url_' + p.passno);
                     } catch (_ce) {}
                 }
-                alert("e-BusPass deleted successfully.");
-                fetchPasses();
+                passes = passes.filter(function(x) { return x._id !== id; });
+                renderCards(passes);
+                hideLoad();
+                showToast("e-BusPass deleted successfully.", "info");
             })
-            .catch(() => { alert("Error deleting pass."); hideLoad(); });
+            .catch(function(err) {
+                hideLoad();
+                alert("Error deleting pass: " + (err.message || 'Network error'));
+            });
         }
 
         function showLoad(txt) { document.getElementById('loadText').textContent = txt; document.getElementById('loading').style.display = "flex"; }

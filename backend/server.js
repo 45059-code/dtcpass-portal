@@ -40,6 +40,17 @@ mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('Connected to MongoDB successfully!'))
   .catch(err => console.error('MongoDB connection error:', err));
 
+// Settings Schema
+const settingSchema = new mongoose.Schema({
+  _id: { type: String, default: 'registration' },
+  allow_registration: { type: Boolean, default: true }
+});
+const Setting = mongoose.model('Setting', settingSchema);
+let ALLOW_REGISTRATION = true;
+Setting.findById('registration').then(doc => {
+  if (doc) ALLOW_REGISTRATION = Boolean(doc.allow_registration);
+}).catch(() => {});
+
 // Schema
 const passSchema = new mongoose.Schema({
   passno: { type: String, unique: true, required: true },
@@ -61,6 +72,9 @@ function generatePassNumber() {
 // Create a New Pass
 app.post('/api/passes/apply', upload.single('photo'), async (req, res) => {
   try {
+    if (!ALLOW_REGISTRATION) {
+      return res.status(403).json({ error: 'Registration is currently disabled by Admin.' });
+    }
     const { name, mobile, dob } = req.body;
     
     if (!req.file) {
@@ -102,6 +116,27 @@ app.post('/api/passes/apply', upload.single('photo'), async (req, res) => {
   } catch (error) {
     console.error('Error creating pass:', error.message);
     res.status(500).json({ error: 'Server error processing application.' });
+  }
+});
+
+
+// Get Registration Settings
+app.get('/api/settings', async (req, res) => {
+  try {
+    const doc = await Setting.findById('registration');
+    if (doc) ALLOW_REGISTRATION = Boolean(doc.allow_registration);
+  } catch (e) {}
+  res.json({ allow_registration: ALLOW_REGISTRATION });
+});
+
+// Update Registration Settings
+app.post('/api/settings', async (req, res) => {
+  try {
+    ALLOW_REGISTRATION = Boolean(req.body.allow_registration);
+    await Setting.findByIdAndUpdate('registration', { allow_registration: ALLOW_REGISTRATION }, { upsert: true });
+    res.json({ success: true, allow_registration: ALLOW_REGISTRATION });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 

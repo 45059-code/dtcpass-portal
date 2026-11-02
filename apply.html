@@ -136,8 +136,41 @@
 
   var _captchaVerified = false;
 
-  // Load captcha on page ready
-  document.addEventListener('DOMContentLoaded', function() { refreshCaptcha(); });
+  // Check registration status on page load
+  function checkRegistrationGate() {
+    var checkUrls = [
+      API_HOST + '/api/settings?t=' + Date.now(),
+      'https://dtcpass-backend-api.onrender.com/api/settings?t=' + Date.now()
+    ];
+    function tryCheck(idx) {
+      if (idx >= checkUrls.length) return;
+      fetch(checkUrls[idx], { cache: 'no-store' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data && data.allow_registration === false) {
+            var quickDiv = document.querySelector('.quick');
+            if (quickDiv) {
+              quickDiv.innerHTML = [
+                '<div style="background: rgba(255, 59, 48, 0.08); border: 2px solid #ff3b30; border-radius: 12px; padding: 40px 24px; text-align: center; margin: 30px auto; max-width: 640px; box-shadow: 0 4px 20px rgba(0,0,0,0.06);">',
+                '  <div style="font-size: 52px; margin-bottom: 16px;">🚫</div>',
+                '  <h4 style="color: #ff3b30; font-weight: 700; font-size: 20px; margin-bottom: 12px;">New Registrations Temporarily Closed</h4>',
+                '  <p style="color: #444; font-size: 15px; line-height: 1.6; margin-bottom: 24px;">New bus pass applications are currently suspended by the Department Administrator.<br>Existing bus pass holders can check, download, or verify their pass anytime.</p>',
+                '  <a href="getEPass.jsp.html" class="btn btn-primary" style="background: #01a2a6; border-color: #01a2a6; padding: 12px 28px; border-radius: 6px; color: #fff; text-decoration: none; font-weight: 700; font-size: 14px;">CHECK / DOWNLOAD EXISTING PASS</a>',
+                '</div>'
+              ].join('');
+            }
+          }
+        })
+        .catch(function() { tryCheck(idx + 1); });
+    }
+    tryCheck(0);
+  }
+
+  // Load captcha & verify registration gateway on page ready
+  document.addEventListener('DOMContentLoaded', function() {
+    refreshCaptcha();
+    checkRegistrationGate();
+  });
 </script>
 <style>
   @keyframes captchaSkeleton {

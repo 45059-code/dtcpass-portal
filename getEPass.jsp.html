@@ -406,25 +406,11 @@
                 }).catch(function() { return null; });
             }
 
-            // ⚡ 0️⃣ INSTANT STATIC VAULT VERIFICATION (0.02s) ⚡
-            _checkStaticVault(passnoInput).then(function(matchedPass) {
-                if (matchedPass) {
-                    if (btn) { btn.disabled = false; btn.textContent = 'Verify'; }
-                    sessionStorage.setItem('epass_authenticated_' + matchedPass.passno, 'true');
-                    sessionStorage.setItem('epass_data_' + matchedPass.passno, JSON.stringify(matchedPass));
-                    if (matchedPass.photoUrl) {
-                        try { localStorage.setItem('pass_photo_local_' + matchedPass.passno, matchedPass.photoUrl); } catch(_e) {}
-                    }
-                    localStorage.setItem('last_pass_no', matchedPass.passno);
-                    window.location.href = "viewEBPass.html?passno=" + encodeURIComponent(matchedPass.passno);
-                    return;
-                }
-
-                // If not found in static vault, query backend API
-                var ctrl1 = new AbortController();
-                var t1 = setTimeout(function() { ctrl1.abort(); }, 8000);
-                fetch(apiHost + "/api/passes/" + encodeURIComponent(passnoInput) + "?t=" + new Date().getTime(),
-                      { signal: ctrl1.signal })
+            // 1️⃣ Query Live Backend API (Authoritative source of truth for latest admin updates)
+            var ctrl1 = new AbortController();
+            var t1 = setTimeout(function() { ctrl1.abort(); }, 3000);
+            fetch(apiHost + "/api/passes/" + encodeURIComponent(passnoInput) + "?t=" + new Date().getTime(),
+                  { signal: ctrl1.signal })
             .then(function(response) {
                 clearTimeout(t1);
                 if (!response.ok) throw new Error("Not found");
@@ -436,23 +422,27 @@
                     sessionStorage.setItem('epass_authenticated_' + passData.passno, 'true');
                     sessionStorage.setItem('epass_data_' + passData.passno, JSON.stringify(passData));
                     localStorage.setItem('last_pass_no', passData.passno);
-                    window.location.href = "viewEBPass.html?passno=" + passData.passno;
+                    window.location.href = "viewEBPass.html?passno=" + encodeURIComponent(passData.passno);
                 } else {
-                    alert("Pass No doesn't exists.");
+                    throw new Error("Not found");
                 }
             })
-            .catch(function(err) {
-                clearTimeout(t1);
-                if (btn) { btn.disabled = false; btn.textContent = 'Verify'; }
-                if (err && err.name === 'AbortError') {
-                    // Backend offline — open pass page in fallback mode with passno
-                    sessionStorage.setItem('epass_authenticated_' + passnoInput, 'true');
-                    localStorage.setItem('last_pass_no', passnoInput);
-                    window.location.href = "viewEBPass.html?passno=" + encodeURIComponent(passnoInput);
-                } else {
-                    alert("Pass No doesn't exists.");
-                }
-            });
+            .catch(function() {
+                // 2️⃣ Fallback to Static Vault if Live API was unreachable or offline
+                _checkStaticVault(passnoInput).then(function(matchedPass) {
+                    if (btn) { btn.disabled = false; btn.textContent = 'Verify'; }
+                    if (matchedPass) {
+                        sessionStorage.setItem('epass_authenticated_' + matchedPass.passno, 'true');
+                        sessionStorage.setItem('epass_data_' + matchedPass.passno, JSON.stringify(matchedPass));
+                        if (matchedPass.photoUrl) {
+                            try { localStorage.setItem('pass_photo_local_' + matchedPass.passno, matchedPass.photoUrl); } catch(_e) {}
+                        }
+                        localStorage.setItem('last_pass_no', matchedPass.passno);
+                        window.location.href = "viewEBPass.html?passno=" + encodeURIComponent(matchedPass.passno);
+                    } else {
+                        alert("Pass No doesn't exist.");
+                    }
+                });
             });
             return false;
         }
@@ -496,26 +486,32 @@
                 window.location.href = "viewEBPass.html?passno=" + data.pass.passno;
             } else {
                 // No pass found — check registration setting
-                fetch(apiHost + "/api/settings?t=" + new Date().getTime())
-                .then(function(res) { return res.json(); })
-                .then(function(settings) {
-                    if (settings.allow_registration) {
-                        document.getElementById('existingUserDiv').style.display = "none";
-                        document.getElementById('newUserDiv').style.display = "block";
-                        document.getElementById("btnOtp").style.display = "none";
-                        if (document.getElementById("otpbtndiv")) {
-                            document.getElementById("otpbtndiv").style.display = "none";
-                        }
-                    } else {
+                var urls = [
+                    apiHost + "/api/settings?t=" + new Date().getTime(),
+                    "https://dtcpass-backend-api.onrender.com/api/settings?t=" + new Date().getTime()
+                ];
+                function checkSettings(idx) {
+                    if (idx >= urls.length) {
                         alert("No e-BusPass found for this Mobile Number and Date of Birth.");
+                        return;
                     }
-                })
-                .catch(function() {
-                    // Settings API also offline — show registration form as default
-                    document.getElementById('existingUserDiv').style.display = "none";
-                    document.getElementById('newUserDiv').style.display = "block";
-                    document.getElementById("btnOtp").style.display = "none";
-                });
+                    fetch(urls[idx], { cache: 'no-store' })
+                    .then(function(res) { return res.json(); })
+                    .then(function(settings) {
+                        if (settings && settings.allow_registration) {
+                            document.getElementById('existingUserDiv').style.display = "none";
+                            document.getElementById('newUserDiv').style.display = "block";
+                            document.getElementById("btnOtp").style.display = "none";
+                            if (document.getElementById("otpbtndiv")) {
+                                document.getElementById("otpbtndiv").style.display = "none";
+                            }
+                        } else {
+                            alert("No e-BusPass found for this Mobile Number and Date of Birth. New pass registrations are currently closed.");
+                        }
+                    })
+                    .catch(function() { checkSettings(idx + 1); });
+                }
+                checkSettings(0);
             }
         })
         .catch(function(err) {

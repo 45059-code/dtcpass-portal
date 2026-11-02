@@ -759,19 +759,13 @@
                         return verifyPassData(vPass);
                     })();
 
-                    // Fast resolution: if live API responds in <400ms, use it immediately.
-                    // Otherwise, static vault resolves in ~20-50ms.
-                    var quickWait = new Promise(function(resolve) { setTimeout(function() { resolve(null); }, 400); });
-                    var verifiedPass = await Promise.race([liveApiPromise, quickWait]);
+                    // 1️⃣ Priority: Fetch fresh live API directly (authoritative source of truth).
+                    // This ensures any admin changes to passenger name, dates, or photo are displayed live.
+                    var verifiedPass = await liveApiPromise;
 
+                    // 2️⃣ Fallback: If live API was unreachable (offline or timeout >2.2s), use secure static vault
                     if (!verifiedPass) {
-                        var vVerified = await vaultPromise;
-                        if (vVerified) {
-                            verifiedPass = vVerified;
-                        } else {
-                            // If not in vault (e.g. brand-new user application), wait for live API
-                            verifiedPass = await liveApiPromise;
-                        }
+                        verifiedPass = await vaultPromise;
                     }
 
                     // Render only when pass data is 100% verified and correct

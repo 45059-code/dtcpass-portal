@@ -822,6 +822,7 @@ class APIHandler(BaseHTTPRequestHandler):
         self._send_json(405, {'error': 'Method Not Allowed'})
 
     # ── PUT ──────────────────────────────────────────────────────────────────
+    # ── PUT ──────────────────────────────────────────────────────────────────
     def do_PUT(self):
         path, _ = self._path_and_query()
 
@@ -834,7 +835,17 @@ class APIHandler(BaseHTTPRequestHandler):
                 if db_col is None:
                     return self._send_json(500, {'error': 'Database not connected'})
 
-                doc = db_col.find_one({'_id': ObjectId(pass_id)})
+                query_id = None
+                try:
+                    query_id = ObjectId(pass_id)
+                except Exception:
+                    query_id = pass_id
+
+                doc = db_col.find_one({'_id': query_id})
+                if not doc and isinstance(query_id, ObjectId):
+                    doc = db_col.find_one({'_id': str(pass_id)})
+                if not doc:
+                    doc = db_col.find_one({'passno': str(pass_id)})
                 if not doc:
                     return self._send_json(404, {'error': 'Pass not found.'})
 
@@ -851,22 +862,52 @@ class APIHandler(BaseHTTPRequestHandler):
                 if fields.get('dob'):     update['dob']       = fields['dob'].strip()
                 if fields.get('passno'):  update['passno']    = fields['passno'].strip()
                 if fields.get('validFrom'):
-                    dt = datetime.fromisoformat(fields['validFrom'])
-                    if dt.tzinfo is None:
-                        dt = dt.replace(tzinfo=timezone.utc)
-                    update['validFrom'] = dt
+                    try:
+                        vf_str = fields['validFrom'].strip()
+                        if 'T' not in vf_str: vf_str += 'T00:00:00'
+                        dt = datetime.fromisoformat(vf_str)
+                        if dt.tzinfo is None:
+                            dt = dt.replace(tzinfo=timezone.utc)
+                        update['validFrom'] = dt
+                    except Exception:
+                        pass
                 if fields.get('validTo'):
-                    dt = datetime.fromisoformat(fields['validTo'])
-                    if dt.tzinfo is None:
-                        dt = dt.replace(tzinfo=timezone.utc)
-                    update['validTo'] = dt
+                    try:
+                        vt_str = fields['validTo'].strip()
+                        if 'T' not in vt_str: vt_str += 'T00:00:00'
+                        dt = datetime.fromisoformat(vt_str)
+                        if dt.tzinfo is None:
+                            dt = dt.replace(tzinfo=timezone.utc)
+                        update['validTo'] = dt
+                    except Exception:
+                        pass
 
+                actual_id = doc.get('_id', query_id)
+                db_col.update_one({'_id': actual_id}, {'$set': update})
+                updated = db_col.find_one({'_id': actual_id})
+                if not updated:
+                    updated = dict(doc)
+                    updated.update(update)
+
+                # Sync to local passes_db.json if present
                 try:
-                    query_id = ObjectId(pass_id)
-                except Exception:
-                    query_id = pass_id
-                db_col.update_one({'_id': query_id}, {'$set': update})
-                updated = db_col.find_one({'_id': query_id})
+                    if os.path.exists(PASSES_DB_FILE):
+                        with open(PASSES_DB_FILE, 'r', encoding='utf-8') as f:
+                            ldata = json.load(f)
+                        p_list = ldata.get('passes', [])
+                        matched = False
+                        target_passno = str(doc.get('passno'))
+                        for idx, lp in enumerate(p_list):
+                            if str(lp.get('passno')) == target_passno:
+                                p_list[idx] = doc_to_dict(updated)
+                                matched = True
+                                break
+                        if matched:
+                            with open(PASSES_DB_FILE, 'w', encoding='utf-8') as f:
+                                json.dump(ldata, f, indent=2)
+                except Exception as disk_e:
+                    print(f"[WARN] Local disk sync warning: {disk_e}")
+
                 print(f"[INFO] Pass successfully updated in database: {doc_to_dict(updated)}")
                 return self._send_json(200, {'success': True, 'pass': doc_to_dict(updated)})
 
@@ -885,16 +926,35 @@ class APIHandler(BaseHTTPRequestHandler):
             try:
                 if db_col is None:
                     return self._send_json(500, {'error': 'Database not connected'})
+                query_id = None
                 try:
                     query_id = ObjectId(pass_id)
                 except Exception:
                     query_id = pass_id
-                result = db_col.find_one_and_delete({'_id': query_id})
-                if not result:
-                    return self._send_json(404, {'error': 'Pass not found.'})
-                return self._send_json(200, {'success': True, 'message': 'Pass deleted successfully.'})
+
+                doc = db_col.find_one({'_id': query_id})
+                if not doc and isinstance(query_id, ObjectId):
+                    doc = db_col.find_one({'_id': str(pass_id)})
+                if not doc:
+                    doc = db_col.find_one({'passno': str(pass_id)})
+
+                if doc:
+                    target_id = doc['_id']
+                    db_col.find_one_and_delete({'_id': target_id})
+                    # Sync to local disk
+                    try:
+                        if os.path.exists(PASSES_DB_FILE):
+                            with open(PASSES_DB_FILE, 'r', encoding='utf-8') as f:
+                                ldata = json.load(f)
+                            p_list = ldata.get('passes', [])
+                            ldata['passes'] = [p for p in p_list if str(p.get('passno')) != str(doc.get('passno'))]
+                            with open(PASSES_DB_FILE, 'w', encoding='utf-8') as f:
+                                json.dump(ldata, f, indent=2)
+                    except Exception as disk_e:
+                        print(f"[WARN] Local disk delete sync warning: {disk_e}")
+                    return self._send_json(200, {'success': True, 'message': 'Pass deleted successfully.'})
+                return self._send_json(404, {'error': 'Pass not found.'})
             except Exception as e:
-                traceback.print_exc()
                 return self._send_json(500, {'error': str(e)})
 
         self._send_json(404, {'error': 'Not found'})
